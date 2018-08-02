@@ -44,6 +44,7 @@ closure_js_library(
     suppress = [
         "JSC_UNKNOWN_EXPR_TYPE",
         "JSC_INEXISTENT_PROPERTY",
+        "JSC_STRICT_INEXISTENT_PROPERTY",
     ],
     deps = [
         "//third_party/web_activities:port",
@@ -57,7 +58,6 @@ closure_js_library(
         "pay_externs.js",
         "paymentsclient_externs.js",
     ],
-    suppress = ["JSC_UNKNOWN_EXPR_TYPE"],
 )
 
 closure_js_library(
@@ -68,7 +68,6 @@ closure_js_library(
     ],
     suppress = [
         "JSC_UNKNOWN_EXPR_TYPE",
-        "JSC_INEXISTENT_PROPERTY",
     ],
 )
 

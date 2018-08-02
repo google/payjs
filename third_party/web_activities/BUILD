@@ -10,6 +10,8 @@ closure_js_library(
         "activity-ports.js",
     ],
     suppress = [
+        'JSC_MISSING_CONST_PROPERTY',
+        'JSC_STRICT_INEXISTENT_PROPERTY',
         'JSC_UNKNOWN_EXPR_TYPE',
         'JSC_NULLABLE_RETURN_WITH_NAME',
         'JSC_MUST_BE_PRIVATE',
@@ -22,6 +24,8 @@ closure_js_library(
         "activities.js",
     ],
     suppress = [
+        'JSC_MISSING_CONST_PROPERTY',
+        'JSC_STRICT_INEXISTENT_PROPERTY',
         'JSC_UNKNOWN_EXPR_TYPE',
         'JSC_NULLABLE_RETURN_WITH_NAME',
         'JSC_MUST_BE_PRIVATE',
