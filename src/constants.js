@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-export const Constants = {};
+const Constants = {};
 
 /**
  * Supported environments.
@@ -36,6 +36,16 @@ Constants.Environment = {
 Constants.PaymentMethod = {
   CARD: 'CARD',
   TOKENIZED_CARD: 'TOKENIZED_CARD',
+};
+
+/**
+ * Auth methods.
+ *
+ * @enum {string}
+ */
+Constants.AuthMethod = {
+  CRYPTOGRAM_3DS: 'CRYPTOGRAM_3DS',
+  PAN_ONLY: 'PAN_ONLY',
 };
 
 /**
@@ -125,7 +135,7 @@ Constants.IFRAME_STYLE = `
   }
 }
 .dialogContainer {
-  background-color: rgba(0,0,0,0.85);
+  background-color: rgba(0,0,0,0.26);
   bottom: 0;
   height: 100%;
   left: 0;
@@ -141,7 +151,7 @@ Constants.BUTTON_LOCALE_TO_MIN_WIDTH = {
   'en': 152,
   'bg': 163,
   'cs': 192,
-  'de': 168,
+  'de': 183,
   'es': 183,
   'fr': 183,
   'hr': 157,
@@ -163,39 +173,61 @@ Constants.BUTTON_LOCALE_TO_MIN_WIDTH = {
 
 Constants.BUTTON_STYLE = `
 .gpay-button {
-    background-origin: content-box;
-    background-position: center center;
-    background-repeat: no-repeat;
-    background-size: contain;
-    border: 0px;
-    border-radius: 4px;
-    box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 1px 0px, rgba(60, 64, 67, 0.15) 0px 1px 3px 1px;
-    cursor: pointer;
-    height: 40px;
-    min-height: 40px;
-    outline: 0px;
-    padding: 11px 24px;
+  background-origin: content-box;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  border: 0px;
+  border-radius: 4px;
+  box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 1px 0px, rgba(60, 64, 67, 0.15) 0px 1px 3px 1px;
+  cursor: pointer;
+  height: 40px;
+  min-height: 40px;
+  outline: 0px;
+  padding: 11px 24px;
 }
 
 .black {
-    background-color: #000;
+  background-color: #000;
+  box-shadow: none;
+  padding: 12px 24px 10px;
 }
 
 .white {
-    background-color: #fff;
+  background-color: #fff;
 }
 
 .short {
-    min-width: 90px;
-    width: 160px;
+  min-width: 90px;
+  width: 160px;
 }
 
 .black.short {
-    background-image: url(https://www.gstatic.com/instantbuy/svg/dark_gpay.svg);
+  background-image: url(https://www.gstatic.com/instantbuy/svg/dark_gpay.svg);
 }
 
 .white.short {
-    background-image: url(https://www.gstatic.com/instantbuy/svg/light_gpay.svg);
+  background-image: url(https://www.gstatic.com/instantbuy/svg/light_gpay.svg);
+}
+
+.black.active {
+  background-color: #5f6368;
+}
+
+.black.hover {
+  background-color: #3c4043;
+}
+
+.white.active {
+  background-color: #fff;
+}
+
+.white.focus {
+  box-shadow: #e8e8e8 0 1px 1px 0, #e8e8e8 0 1px 3px;
+}
+
+.white.hover {
+  background-color: #f8f8f8;
 }
 `;
 
@@ -205,4 +237,6 @@ Constants.BUTTON_STYLE = `
  * @const {string}
  */
 Constants.TRUSTED_DOMAIN = '.google.com';
+
+export {Constants};
 

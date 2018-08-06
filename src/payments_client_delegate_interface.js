@@ -19,7 +19,7 @@
  * An interface which captures what we need to start up buyflow across surfaces.
  * @interface
  */
-export class PaymentsClientDelegateInterface {
+class PaymentsClientDelegateInterface {
   /**
    * Check whether the user can make payments using the Payment API.
    *
@@ -54,3 +54,4 @@ export class PaymentsClientDelegateInterface {
   onResult(callback) {}
 }
 
+export {PaymentsClientDelegateInterface};

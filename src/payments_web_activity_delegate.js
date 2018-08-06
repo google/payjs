@@ -18,12 +18,12 @@
 import {Constants} from './constants.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
 import {ActivityPorts, ActivityIframePort} from '../third_party/web_activities/activity-ports.js';
-import {BuyFlowActivityMode, PayFrameHelper} from './pay_frame_helper.js';
+import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType} from './pay_frame_helper.js';
 import {doesMerchantSupportOnlyTokenizedCards} from './validator.js';
 import {injectStyleSheet, injectIframe} from './element_injector.js';
 
-const IFRAME_CLOSE_DURATION_IN_MS = 300;
-const IFRAME_SHOW_UP_DURATION_IN_MS = 300;
+const IFRAME_CLOSE_DURATION_IN_MS = 250;
+const IFRAME_SHOW_UP_DURATION_IN_MS = 250;
 const ERROR_PREFIX = 'Error: ';
 
 /**
@@ -54,7 +54,7 @@ let ResizePayload;
  * hosting page along with web activities to actually get to the hosting page.
  * @implements {PaymentsClientDelegateInterface}
  */
-export class PaymentsWebActivityDelegate {
+class PaymentsWebActivityDelegate {
   /**
    * @param {string} environment
    * @param {string} googleTransactionId
@@ -88,8 +88,6 @@ export class PaymentsWebActivityDelegate {
      * @private {?ResizePayload}
      */
     this.savedResizePayload_ = null;
-
-    PayFrameHelper.setGoogleTransactionId(this.googleTransactionId_);
 
     injectStyleSheet(Constants.IFRAME_STYLE);
   }
@@ -170,15 +168,26 @@ export class PaymentsWebActivityDelegate {
         resolve({'result': false});
         return;
       }
-      const isEdge = userAgent.indexOf('Edge/') > 0;
-      if (isEdge) {
-        resolve({'result': false});
-        return;
-      }
       const isSupported = userAgent.indexOf(BrowserUserAgent.CHROME) > 0 ||
           userAgent.indexOf(BrowserUserAgent.FIREFOX) > 0 ||
           userAgent.indexOf(BrowserUserAgent.SAFARI) > 0;
-      resolve({'result': isSupported});
+      if (isSupported && isReadyToPayRequest.apiVersion >= 2) {
+        isReadyToPayRequest.environment = this.environment_;
+        PayFrameHelper.sendAndWaitForResponse(
+            isReadyToPayRequest, PostMessageEventType.IS_READY_TO_PAY,
+            'isReadyToPayResponse', function(event) {
+              const response = {
+                'result': isSupported,
+              };
+              if (isReadyToPayRequest.existingPaymentMethodRequired) {
+                response['paymentMethodPresent'] =
+                    event.data['isReadyToPayResponse'] == 'READY_TO_PAY';
+              }
+              resolve(response);
+            });
+      } else {
+        resolve({'result': isSupported});
+      }
     });
   }
 
@@ -202,13 +211,6 @@ export class PaymentsWebActivityDelegate {
 
   /** @override */
   loadPaymentData(paymentDataRequest) {
-    const internalParam = {
-      'startTimeMs': Date.now(),
-      'googleTransactionId': this.googleTransactionId_,
-    };
-    paymentDataRequest['i'] = paymentDataRequest['i'] ?
-        Object.assign(internalParam, paymentDataRequest['i']) :
-        internalParam;
     if (!paymentDataRequest.swg) {
       // Only set the apiVersion if the merchant is not setting it.
       if (!paymentDataRequest.apiVersion) {
@@ -219,7 +221,6 @@ export class PaymentsWebActivityDelegate {
     if (this.useIframe_) {
       PayFrameHelper.setBuyFlowActivityMode(BuyFlowActivityMode.IFRAME);
       // TODO: Compare the request with prefetched request.
-      // goog.object.equals won't work as it doesn't do deep comparison.
       let containerAndFrame;
       let paymentDataPromise;
       if (this.prefetchedObjects_) {
@@ -235,6 +236,13 @@ export class PaymentsWebActivityDelegate {
       }
       this.showContainerAndIframeWithAnimation_(
           containerAndFrame['container'], containerAndFrame['iframe']);
+      history.pushState({}, '', '');
+      const onPopState = (e) => {
+        e.preventDefault();
+        this.backButtonHandler_(containerAndFrame);
+        window.removeEventListener('popstate', onPopState);
+      };
+      window.addEventListener('popstate', onPopState);
       const dismissPromise = new Promise(resolve => {
         this.dismissPromiseResolver_ = resolve;
       });
@@ -250,7 +258,6 @@ export class PaymentsWebActivityDelegate {
         {'width': 600, 'height': 600});
   }
 
-
   /**
    * Returns the render mode whether need to force redirect.
    *
@@ -259,7 +266,9 @@ export class PaymentsWebActivityDelegate {
    * @private
    */
   getRenderMode_(paymentDataRequest) {
-    return paymentDataRequest['forceRedirect'] ? '_top' : 'gp-js-popup';
+    return paymentDataRequest['forceRedirect'] ?
+        '_top' :
+        'gp-js-popup';
   }
 
   /**
@@ -328,7 +337,9 @@ export class PaymentsWebActivityDelegate {
     iframe.height = '0px';
     // TODO: This should be replaced by listening to TransitionEnd event
     setTimeout(() => {
-      container.parentNode.removeChild(container);
+      if (container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
     }, IFRAME_CLOSE_DURATION_IN_MS);
   }
 
@@ -341,7 +352,7 @@ export class PaymentsWebActivityDelegate {
     const iframe = containerAndFrame['iframe'];
     const container = containerAndFrame['container'];
     container.addEventListener(
-        'click', this.dismissIframe_.bind(this, containerAndFrame));
+        'click', this.closeActionHandler_.bind(this, containerAndFrame));
     // Hide iframe and disable resize at initialize.
     container.style.display = 'none';
     iframe.style.display = 'none';
@@ -354,18 +365,42 @@ export class PaymentsWebActivityDelegate {
   }
 
   /**
+   * Handler when back button is triggered, should dismiss iframe if present.
+   * @param {{container: !Element, iframe:!HTMLIFrameElement}} containerAndFrame
+   * @private
+   */
+  backButtonHandler_(containerAndFrame) {
+    this.dismissIframe_(containerAndFrame);
+  }
+
+  /**
+   * Handler when close action is triggered, will pop history state to close
+   * the iframe.
+   * @param {{container: !Element, iframe:!HTMLIFrameElement}} containerAndFrame
+   * @private
+   */
+  closeActionHandler_(containerAndFrame) {
+    if (containerAndFrame['container'].parentNode) {
+      // Close action only when container is still attached to the page.
+      history.back();
+    }
+  }
+
+  /**
    * @param {{container: !Element, iframe:!HTMLIFrameElement}} containerAndFrame
    * @private
    */
   dismissIframe_(containerAndFrame) {
-    // TODO: Think about whether this could be just hide instead of
-    // disconnect and remove, the tricky part is how to handle the case where
-    // payment data request is not the same.
-    this.dismissPromiseResolver_(
-        Promise.reject({'errorCode': 'CANCELED'}));
-    this.removeIframeAndContainer_(
-        containerAndFrame['container'], containerAndFrame['iframe']);
-    this.port_.disconnect();
+    // Dismiss iframe only when container is still attached in the page.
+    if (containerAndFrame['container'].parentNode) {
+      // TODO: Think about whether this could be just hide instead of
+      // disconnect and remove, the tricky part is how to handle the case where
+      // payment data request is not the same.
+      this.dismissPromiseResolver_(Promise.reject({'errorCode': 'CANCELED'}));
+      this.removeIframeAndContainer_(
+          containerAndFrame['container'], containerAndFrame['iframe']);
+      this.port_ && this.port_.disconnect();
+    }
   }
 
   /**
@@ -419,7 +454,6 @@ export class PaymentsWebActivityDelegate {
       if (!paymentDataRequest.apiVersion) {
         paymentDataRequest.apiVersion = 1;
       }
-      paymentDataRequest.allowedPaymentMethods = [Constants.PaymentMethod.CARD];
     }
     paymentDataRequest.environment = this.environment_;
     const trustedUrl =
@@ -449,13 +483,18 @@ export class PaymentsWebActivityDelegate {
              */
             result => {
               this.removeIframeAndContainer_(container, iframe);
+              // This is only for popping the state we pushed earlier.
+              history.back();
               const data = /** @type {!PaymentData} */ (result['data']);
               return data;
             },
             error => {
               this.removeIframeAndContainer_(container, iframe);
+              // This is only for popping the state we pushed earlier.
+              history.back();
               return Promise.reject(error);
             });
   }
 }
 
+export {PaymentsWebActivityDelegate};

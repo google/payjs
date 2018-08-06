@@ -8,6 +8,9 @@ http_archive(
     ],
 )
 
+# TODO: Importing dagger library is required because old dagger library imported by closure is
+# not compatible with Java 9. Remove when closure imports new version of dagger
+
 load("@io_bazel_rules_closure//closure/private:java_import_external.bzl", "java_import_external")
 
 java_import_external(
@@ -99,6 +102,8 @@ java_import_external(
     ],
     licenses = ["notice"],  # Apache 2.0
 )
+
+# End TODO
 
 load("@io_bazel_rules_closure//closure:defs.bzl", "closure_repositories")
 

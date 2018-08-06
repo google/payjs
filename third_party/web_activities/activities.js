@@ -2,7 +2,6 @@
  * @fileoverview Import from Web Activities project
  * (https://github.com/google/web-activities).
  */
-
 /**
  * @license
  * Copyright 2017 The Web Activities Authors. All Rights Reserved.
@@ -25,7 +24,7 @@
 /**
  * @enum {string}
  */
-export const ActivityMode = {
+const ActivityMode = {
   IFRAME: 'iframe',
   POPUP: 'popup',
   REDIRECT: 'redirect',
@@ -36,7 +35,7 @@ export const ActivityMode = {
  * The result code used for `ActivityResult`.
  * @enum {string}
  */
-export const ActivityResultCode = {
+const ActivityResultCode = {
   OK: 'ok',
   CANCELED: 'canceled',
   FAILED: 'failed',
@@ -48,7 +47,7 @@ export const ActivityResultCode = {
  * for a successful result, a cancelation or a failure.
  * @struct
  */
-export class ActivityResult {
+class ActivityResult {
   /**
    * @param {!ActivityResultCode} code
    * @param {*} data
@@ -90,7 +89,7 @@ export class ActivityResult {
  *   originVerified: (boolean|undefined),
  * }}
  */
-export let ActivityRequest;
+let ActivityRequest;
 
 
 /**
@@ -100,7 +99,7 @@ export let ActivityRequest;
  *
  * @interface
  */
-export class ActivityHost {
+class ActivityHost {
 
   /**
    * Returns the mode of the activity: iframe, popup or redirect.
@@ -246,7 +245,6 @@ export class ActivityHost {
    */
   disconnect() {}
 }
-
 
 
 /** @type {?HTMLAnchorElement} */
@@ -545,7 +543,7 @@ class Messenger {
    * "start" command. See `sendStartCommand` method.
    */
   sendConnectCommand() {
-    // TODO(dvoytenko): MessageChannel is critically necessary for IE/Edge,
+    // TODO: MessageChannel is critically necessary for IE/Edge,
     // since window messaging doesn't always work. It's also preferred as an API
     // for other browsers: it's newer, cleaner and arguably more secure.
     // Unfortunately, browsers currently do not propagate user gestures via
@@ -808,7 +806,7 @@ function closePort(port) {
  *
  * @implements {ActivityHost}
  */
-export class ActivityIframeHost {
+class ActivityIframeHost {
 
   /**
    * @param {!Window} win
@@ -1078,7 +1076,7 @@ export class ActivityIframeHost {
  *
  * @implements {ActivityHost}
  */
-export class ActivityWindowPopupHost {
+class ActivityWindowPopupHost {
 
   /**
    * @param {!Window} win
@@ -1167,7 +1165,7 @@ export class ActivityWindowPopupHost {
     } catch (e) {
       // Ignore.
     }
-    // TODO(dvoytenko): consider an optional "failed to close" callback. Wait
+    // TODO: consider an optional "failed to close" callback. Wait
     // for ~5s and check `this.win_.closed`.
   }
 
@@ -1303,7 +1301,7 @@ export class ActivityWindowPopupHost {
     });
     // Do not disconnect, wait for "close" message to ack the result receipt.
     this.win_.removeEventListener('unload', this.boundUnload_);
-    // TODO(dvoytenko): Consider taking an action if result acknowledgement
+    // TODO: Consider taking an action if result acknowledgement
     // does not arrive in some time (3-5s). For instance, we can redirect
     // back or ask the host implementer to take an action.
   }
@@ -1354,7 +1352,7 @@ export class ActivityWindowPopupHost {
  *
  * @implements {ActivityHost}
  */
-export class ActivityWindowRedirectHost {
+class ActivityWindowRedirectHost {
 
   /**
    * @param {!Window} win
@@ -1633,7 +1631,7 @@ export class ActivityWindowRedirectHost {
  * used as a singleton. It can be used to connect an activity host of any type:
  * an iframe, a popup, or a redirect.
  */
-export class ActivityHosts {
+class ActivityHosts {
 
   /**
    * @param {!Window} win
@@ -1668,3 +1666,16 @@ export class ActivityHosts {
   }
 }
 
+
+
+export {
+  ActivityHosts,
+  ActivityHost,
+  ActivityIframeHost,
+  ActivityMode,
+  ActivityRequest,
+  ActivityResult,
+  ActivityResultCode,
+  ActivityWindowPopupHost,
+  ActivityWindowRedirectHost,
+};

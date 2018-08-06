@@ -19,7 +19,7 @@
  * Service wrapping window.parent.postMessage. This enables
  * window.postMessage to be swapped out in unit tests.
  */
-export class PostMessageService {
+class PostMessageService {
   constructor(window) {
     /** @private @const {!Window} */
     this.window_ = window;
@@ -37,3 +37,4 @@ export class PostMessageService {
   }
 }
 
+export {PostMessageService};

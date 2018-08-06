@@ -20,8 +20,8 @@ import {PaymentsClientDelegateInterface} from './payments_client_delegate_interf
 import {PaymentsRequestDelegate} from './payments_request_delegate.js';
 import {PaymentsWebActivityDelegate} from './payments_web_activity_delegate.js';
 import uuid from '../third_party/random_uuid/Random.uuid.js';
-import {PayFrameHelper, PostMessageEventType, PublicErrorCode} from './pay_frame_helper.js';
-import {chromeSupportsPaymentRequest, doesMerchantSupportOnlyTokenizedCards, validatePaymentOptions, validateIsReadyToPayRequest, validatePaymentDataRequest, validateSecureContext} from './validator.js';
+import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType, PublicErrorCode} from './pay_frame_helper.js';
+import {apiV2DoesMerchantSupportSpecifiedCardType, chromeSupportsPaymentHandler, chromeSupportsPaymentRequest, doesMerchantSupportOnlyTokenizedCards, validatePaymentOptions, validateIsReadyToPayRequest, validatePaymentDataRequest, validateSecureContext} from './validator.js';
 import {createButtonHelper} from './button.js';
 
 const TRUSTED_DOMAINS = [
@@ -45,7 +45,7 @@ const TRUSTED_DOMAINS = [
  * it exposes a promises based api which is easier to deal with.
  * @final
  */
-export class PaymentsAsyncClient {
+class PaymentsAsyncClient {
   /**
    * @param {PaymentOptions} paymentOptions
    * @param {function(!Promise<!PaymentData>)} onPaymentResponse
@@ -71,18 +71,26 @@ export class PaymentsAsyncClient {
     this.webActivityDelegate_ = new PaymentsWebActivityDelegate(
         this.environment_, this.googleTransactionId_, opt_useIframe);
 
+    const paymentRequestSupported = chromeSupportsPaymentRequest();
     // TODO: Remove the temporary hack that disable payments
     // request for inline flow.
     /** @private @const {?PaymentsClientDelegateInterface} */
-    this.delegate_ = chromeSupportsPaymentRequest() && !opt_useIframe ?
+    this.delegate_ = paymentRequestSupported && !opt_useIframe ?
         new PaymentsRequestDelegate(this.environment_) :
         this.webActivityDelegate_;
 
     this.webActivityDelegate_.onResult(this.onResult_.bind(this));
     this.delegate_.onResult(this.onResult_.bind(this));
 
-    PayFrameHelper.load(this.environment_);
-    PayFrameHelper.setGoogleTransactionId(this.googleTransactionId_);
+    PayFrameHelper.load(this.environment_, this.googleTransactionId_);
+    // If web delegate is used anyway then this is overridden in the web
+    // activity delegate when load payment data is called.
+    if (chromeSupportsPaymentHandler()) {
+      PayFrameHelper.setBuyFlowActivityMode(
+          BuyFlowActivityMode.PAYMENT_HANDLER);
+    } else if (paymentRequestSupported) {
+      PayFrameHelper.setBuyFlowActivityMode(BuyFlowActivityMode.ANDROID_NATIVE);
+    }
 
     window.addEventListener(
         'message', event => this.handleMessageEvent_(event));
@@ -97,6 +105,7 @@ export class PaymentsAsyncClient {
    * @export
    */
   isReadyToPay(isReadyToPayRequest) {
+    const startTimeMs = Date.now();
     /** @type {?string} */
     const errorMessage = validateSecureContext() ||
         validateIsReadyToPayRequest(isReadyToPayRequest);
@@ -113,10 +122,12 @@ export class PaymentsAsyncClient {
         });
       });
     }
-    const startTimeMs = Date.now();
-    const webPromise =
-        this.webActivityDelegate_.isReadyToPay(isReadyToPayRequest)
-            .then(response => {
+
+    const isReadyToPayPromise = this.isReadyToPay_(isReadyToPayRequest);
+
+    isReadyToPayPromise
+        .then(
+            response => {
               PayFrameHelper.postMessage({
                 'eventType': PostMessageEventType.LOG_IS_READY_TO_PAY_API,
                 'clientLatencyStartMs': startTimeMs,
@@ -124,20 +135,100 @@ export class PaymentsAsyncClient {
               });
               return response;
             });
+    return isReadyToPayPromise;
+  }
 
+  /**
+   * Actual implementation of isReadyToPay in a private method so that
+   * we can add callbacks to the promise to measure latencies.
+   *
+   * @param {!IsReadyToPayRequest} isReadyToPayRequest
+   * @return {!Promise} The promise will contain the boolean result and error
+   *     message when possible.
+   * @private
+   */
+  isReadyToPay_(isReadyToPayRequest) {
     if (chromeSupportsPaymentRequest()) {
-      // If the merchant supports only Tokenized cards then just rely on
-      // delegate to give us the result.
-      // This will need to change once b/78519188 is fixed.
-      const nativePromise = this.delegate_.isReadyToPay(
-          isReadyToPayRequest);
-      if (doesMerchantSupportOnlyTokenizedCards(isReadyToPayRequest)) {
-        return nativePromise;
+      if (isReadyToPayRequest.apiVersion >= 2) {
+        return this.isReadyToPayApiV2ForChromePaymentRequest_(
+            isReadyToPayRequest);
+      } else {
+        // This is the apiVersion 1 branch.
+        // If the merchant supports only Tokenized cards then just rely on
+        // delegate to give us the result.
+        // This will need to change once b/78519188 is fixed.
+        const webPromise =
+            this.webActivityDelegate_.isReadyToPay(isReadyToPayRequest);
+        const nativePromise = this.delegate_.isReadyToPay(isReadyToPayRequest);
+        if (doesMerchantSupportOnlyTokenizedCards(isReadyToPayRequest) &&
+            !chromeSupportsPaymentHandler()) {
+          return nativePromise;
+        }
+        // Return webIsReadyToPay only if delegateIsReadyToPay has been
+        // executed.
+        return nativePromise.then(() => webPromise);
       }
-      // Return webIsReadyToPay only if delegateIsReadyToPay has been executed.
+    }
+    const webPromise =
+        this.webActivityDelegate_.isReadyToPay(isReadyToPayRequest);
+    return webPromise;
+  }
+
+  /**
+   * Handle is ready to pay for api v2.
+   *
+   * @param {!IsReadyToPayRequest} isReadyToPayRequest
+   * @return {!Promise} The promise will contain the boolean result and error
+   *     message when possible.
+   * @private
+   */
+  isReadyToPayApiV2ForChromePaymentRequest_(isReadyToPayRequest) {
+    let defaultPromise = Promise.resolve({'result': false});
+    if (isReadyToPayRequest.existingPaymentMethodRequired) {
+      defaultPromise =
+          Promise.resolve({'result': false, 'paymentMethodPresent': false});
+    }
+
+    let nativePromise = defaultPromise;
+    if (apiV2DoesMerchantSupportSpecifiedCardType(
+            isReadyToPayRequest, Constants.AuthMethod.CRYPTOGRAM_3DS)) {
+      // If the merchant supports tokenized cards.
+      // Make a separate call to gms core to check if the user isReadyToPay
+      // with just tokenized cards. We can't pass in PAN_ONLY here
+      // because gms core always returns true for PAN_ONLY.
+      // Leave other payment methods as is.
+      const nativeRtpRequest = /** @type {!IsReadyToPayRequest} */
+          (JSON.parse(JSON.stringify(isReadyToPayRequest)));
+      for (var i = 0; i < nativeRtpRequest.allowedPaymentMethods.length; i++) {
+        if (nativeRtpRequest.allowedPaymentMethods[i].type ==
+            Constants.PaymentMethod.CARD) {
+          nativeRtpRequest.allowedPaymentMethods[i]
+              .parameters['allowedAuthMethods'] =
+              [Constants.AuthMethod.CRYPTOGRAM_3DS];
+        }
+      }
+
+      nativePromise = this.delegate_.isReadyToPay(nativeRtpRequest);
+    }
+
+    let webPromise = defaultPromise;
+    if (apiV2DoesMerchantSupportSpecifiedCardType(
+            isReadyToPayRequest, Constants.AuthMethod.PAN_ONLY)) {
+      webPromise = this.webActivityDelegate_.isReadyToPay(isReadyToPayRequest);
+    }
+
+    // Update session storage with payment handler canMakePayment result but
+    // rely on web delegate for actual response
+    if (chromeSupportsPaymentHandler()) {
       return nativePromise.then(() => webPromise);
     }
-    return webPromise;
+
+    return nativePromise.then(nativeResult => {
+      if ((nativeResult && nativeResult['result']) == true) {
+        return nativeResult;
+      }
+      return webPromise;
+    });
   }
 
   /**
@@ -159,6 +250,7 @@ export class PaymentsAsyncClient {
           'prefetchPaymentData', errorMessage);
       return;
     }
+    this.assignInternalParams_(paymentDataRequest);
     if (chromeSupportsPaymentRequest()) {
       this.delegate_.prefetchPaymentData(paymentDataRequest);
     } else {
@@ -197,12 +289,17 @@ export class PaymentsAsyncClient {
       return;
     }
 
-    const paymentRequestUnavailable = window.sessionStorage.getItem(
-        Constants.IS_READY_TO_PAY_RESULT_KEY) === 'false';
+    const isReadyToPayResult =
+        window.sessionStorage.getItem(Constants.IS_READY_TO_PAY_RESULT_KEY);
     this.loadPaymentDataApiStartTimeMs_ = Date.now();
-    if (paymentDataRequest.swg || paymentRequestUnavailable) {
-      // For SWG and clients where canMakePayment returns false, always use
-      // hosting page.
+    this.assignInternalParams_(paymentDataRequest);
+    // We want to fall back to the web delegate in three cases:
+    // 1) SwG request
+    // 2) If isReadyToPay bit (from canMakePayment) is explicitly set to false
+    // 3) If payment handler is supported and isReadyToPay bit is not explicitly
+    // set to true (fallback to web if isReadyToPay wasn't called for PH)
+    if (paymentDataRequest.swg || isReadyToPayResult === 'false' ||
+        (chromeSupportsPaymentHandler() && isReadyToPayResult !== 'true')) {
       this.webActivityDelegate_.loadPaymentData(paymentDataRequest);
     } else {
       this.delegate_.loadPaymentData(paymentDataRequest);
@@ -298,5 +395,22 @@ export class PaymentsAsyncClient {
   createGoogleTransactionId_(environment) {
     return uuid.uuidFast() + '.' + environment;
   }
+
+  /**
+   * @param {!PaymentDataRequest} paymentDataRequest
+   * @return {!PaymentDataRequest}
+   * @private
+   */
+  assignInternalParams_(paymentDataRequest) {
+    const internalParam = {
+      'startTimeMs': Date.now(),
+      'googleTransactionId': this.googleTransactionId_,
+    };
+    paymentDataRequest['i'] = paymentDataRequest['i'] ?
+        Object.assign(internalParam, paymentDataRequest['i']) :
+        internalParam;
+    return paymentDataRequest;
+  }
 }
 
+export {PaymentsAsyncClient};

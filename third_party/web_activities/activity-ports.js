@@ -2,7 +2,6 @@
  * @fileoverview Import from Web Activities project
  * (https://github.com/google/web-activities).
  */
-
 /**
  * @license
  * Copyright 2017 The Web Activities Authors. All Rights Reserved.
@@ -25,7 +24,7 @@
 /**
  * @enum {string}
  */
-export const ActivityMode = {
+const ActivityMode = {
   IFRAME: 'iframe',
   POPUP: 'popup',
   REDIRECT: 'redirect',
@@ -36,7 +35,7 @@ export const ActivityMode = {
  * The result code used for `ActivityResult`.
  * @enum {string}
  */
-export const ActivityResultCode = {
+const ActivityResultCode = {
   OK: 'ok',
   CANCELED: 'canceled',
   FAILED: 'failed',
@@ -59,7 +58,7 @@ let ActivityRequest;
  * for a successful result, a cancelation or a failure.
  * @struct
  */
-export class ActivityResult {
+class ActivityResult {
   /**
    * @param {!ActivityResultCode} code
    * @param {*} data
@@ -108,7 +107,7 @@ export class ActivityResult {
  *   height: (number|undefined),
  * }}
  */
-export let ActivityOpenOptions;
+let ActivityOpenOptions;
 
 
 /**
@@ -118,7 +117,7 @@ export let ActivityOpenOptions;
  *
  * @interface
  */
-export class ActivityPort {
+class ActivityPort {
 
   /**
    * Returns the mode of the activity: iframe, popup or redirect.
@@ -700,7 +699,7 @@ function createAbortError(win, opt_message) {
   const message = 'AbortError' + (opt_message ? ': ' + opt_message : '');
   let error = null;
   if (typeof win['DOMException'] == 'function') {
-    // TODO(dvoytenko): remove typecast once externs are fixed.
+    // TODO: remove typecast once externs are fixed.
     const constr = /** @type {function(new:DOMException, string, string)} */ (
         win['DOMException']);
     try {
@@ -710,7 +709,7 @@ function createAbortError(win, opt_message) {
     }
   }
   if (!error) {
-    // TODO(dvoytenko): remove typecast once externs are fixed.
+    // TODO: remove typecast once externs are fixed.
     const constr = /** @type {function(new:DOMException, string)} */ (
         Error);
     error = new constr(message);
@@ -750,7 +749,7 @@ function resolveResult(win, result, resolver) {
  *
  * @implements {ActivityPort}
  */
-export class ActivityIframePort {
+class ActivityIframePort {
 
   /**
    * @param {!HTMLIFrameElement} iframe
@@ -955,7 +954,7 @@ export class ActivityIframePort {
  *
  * @implements {ActivityPort}
  */
-export class ActivityWindowPort {
+class ActivityWindowPort {
 
   /**
    * @param {!Window} win
@@ -966,9 +965,10 @@ export class ActivityWindowPort {
    * @param {?ActivityOpenOptions=} opt_options
    */
   constructor(win, requestId, url, target, opt_args, opt_options) {
+    const unwrappedTarget_ = target && target;
     const isValidTarget =
-        target &&
-        (target == '_blank' || target == '_top' || target[0] != '_');
+        unwrappedTarget_ && (unwrappedTarget_ == '_blank' ||
+            unwrappedTarget_ == '_top' || unwrappedTarget_[0] != '_');
     if (!isValidTarget) {
       throw new Error('The only allowed targets are "_blank", "_top"' +
           ' and name targets');
@@ -1231,8 +1231,10 @@ export class ActivityWindowPort {
    */
   check_(opt_delayCancel) {
     if (!this.targetWin_ || this.targetWin_.closed) {
-      this.win_.clearInterval(this.heartbeatInterval_);
-      this.heartbeatInterval_ = null;
+      if (this.heartbeatInterval_) {
+        this.win_.clearInterval(this.heartbeatInterval_);
+        this.heartbeatInterval_ = null;
+      }
       // Give a chance for the result to arrive, but otherwise consider the
       // responce to be empty.
       this.win_.setTimeout(() => {
@@ -1407,7 +1409,7 @@ class ActivityWindowRedirectPort {
  * as a singleton. It can start activities of all modes: iframe, popup, and
  * redirect.
  */
-export class ActivityPorts {
+class ActivityPorts {
 
   /**
    * @param {!Window} win
@@ -1574,3 +1576,15 @@ export class ActivityPorts {
   }
 }
 
+
+
+export {
+  ActivityPorts,
+  ActivityIframePort,
+  ActivityMode,
+  ActivityOpenOptions,
+  ActivityPort,
+  ActivityResult,
+  ActivityResultCode,
+  ActivityWindowPort,
+};

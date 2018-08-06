@@ -21,7 +21,7 @@ import {PaymentsAsyncClient} from './payjs_async.js';
  * The client for interacting with the Google Pay APIs.
  * @final
  */
-export class PaymentsClient {
+class PaymentsClient {
   /**
    * @param {PaymentOptions=} paymentOptions
    * @param {boolean=} opt_useIframe
@@ -78,6 +78,11 @@ export class PaymentsClient {
    * @export
    */
   loadPaymentData(paymentDataRequest) {
+    if (null) {
+      // TODO: Remove this once I verified it worked in other
+      // environment other than local.
+      console.log('ZOMBIEMONKEYATEMYBRAIN');
+    }
     /** @type {!Promise<!PaymentData>} */
     const promise = new Promise(resolve => {
       if (this.pending_) {
@@ -105,8 +110,9 @@ export class PaymentsClient {
    * @return {!Element}
    * @export
    */
-  createButton(options={}) {
+  createButton(options = {}) {
     return this.asyncClient_.createButton(options);
   }
 }
 
+export {PaymentsClient};

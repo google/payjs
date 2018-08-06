@@ -27,7 +27,7 @@ let hasStylesheetBeenInjected_ = false;
  * @param {ButtonOptions=} options
  * @return {!Element}
  */
-export function createButtonHelper(options = {}) {
+function createButtonHelper(options = {}) {
   if (!hasStylesheetBeenInjected_) {
     injectStyleSheet(Constants.BUTTON_STYLE);
     injectStyleSheet(getLongGPayButtonCss_());
@@ -45,21 +45,7 @@ export function createButtonHelper(options = {}) {
   }
   const classForGpayButton = getClassForGpayButton_(options);
   button.setAttribute('class', `gpay-button ${classForGpayButton}`);
-
-  const hoverBackgroundColor = isWhiteColor_(options) ? '#f8f8f8' : '#3c4043';
-  button.addEventListener('mouseover', /** @this {!Element}*/ function() {
-    this.style.backgroundColor = hoverBackgroundColor;
-  });
-  button.addEventListener('mouseout', /** @this {!Element}*/ function() {
-    this.style.backgroundColor = '';
-  });
-  const mouseDownBackgroundColor = isWhiteColor_(options) ? '#e8e8e8' : '#202124';
-  button.addEventListener('mousedown', /** @this {!Element}*/ function() {
-    this.style.backgroundColor = mouseDownBackgroundColor;
-  });
-  button.addEventListener('mouseup', /** @this {!Element}*/ function() {
-    this.style.backgroundColor = '';
-  });
+  addButtonEventListenersForStyling(button);
 
   if (options.onClick) {
     button.addEventListener('click', options.onClick);
@@ -69,6 +55,40 @@ export function createButtonHelper(options = {}) {
   const div = document.createElement('div');
   div.appendChild(button);
   return div;
+}
+
+/**
+ * Applies the hover, active, and focus event listeners to update
+ * CSS styles.
+ *
+ * @param {!Element} button
+ * @private
+ */
+function addButtonEventListenersForStyling(button) {
+  // Set :hover styling
+  ['mouseover', 'mouseout'].map(function(e) {
+    button.addEventListener(e, /** @this {!Element}*/ function(e) {
+      // The second argument in toggle either sets or removes the class
+      // depending on the boolean value passed in. We only want to set it
+      // when the initial event takes place (i.e: mouseover, mousedown, focus),
+      // and otherwise we remove it.
+      button.classList.toggle('hover', e.type == 'mouseover');
+    });
+  });
+
+  // Set :active styling
+  ['mousedown', 'mouseup', 'mouseout'].map(function(e) {
+    button.addEventListener(e, /** @this {!Element}*/ function(e) {
+      button.classList.toggle('active', e.type == 'mousedown');
+    });
+  });
+
+  // Set :focus styling
+  ['focus', 'blur'].map(function(e) {
+    button.addEventListener(e, /** @this {!Element}*/ function(e) {
+      button.classList.toggle('focus', e.type == 'focus');
+    });
+  });
 }
 
 /**
@@ -104,7 +124,8 @@ function getClassForGpayButton_(options) {
 function getLongGPayButtonCss_() {
   // navigator.userLanguage is used for IE
   const defaultLocale = 'en';
-  let locale = navigator.language || navigator.userLanguage || defaultLocale;
+  let locale = navigator.language ||
+      /** @type {string} */ (navigator.userLanguage) || defaultLocale;
   if (locale != defaultLocale) {
     // Get language part of locale (e.g: fr-FR is fr) and check if it is
     // supported, otherwise default to en
@@ -144,7 +165,11 @@ function isWhiteColor_(options) {
 }
 
 /** Visible for testing. */
-export function resetButtonStylesheet() {
+function resetButtonStylesheet() {
   hasStylesheetBeenInjected_ = false;
 }
 
+export {
+  createButtonHelper,
+  resetButtonStylesheet
+};

@@ -33,16 +33,34 @@
  */
 var PaymentOptions;
 
+/**
+ * @typedef{{
+ *  type: string,
+ *  parameters: !Object
+ * }}
+ *
+ * @property {string} type The type of allowed payment method.
+ * @property {Object} parameters The parameters for the payment type.
+ */
+var PaymentMethod;
 
 /**
  * Request object of isReadyToPay.
  *
  * @typedef {{
- *   allowedPaymentMethods: (?Array<string>|undefined),
+ *   allowedPaymentMethods: (?Array<string>|?Array<PaymentMethod>|undefined),
+ *   apiVersion: (?number|undefined),
+ *   apiVersionMinor: (?number|undefined),
+ *   environment: (?string|undefined),
+ *   existingPaymentMethodRequired: (boolean|undefined)
  * }}
  *
  * @property {Array<string>} allowedPaymentMethods The allowedPaymentMethods can
  *     be 'CARD' or 'TOKENIZED_CARD'.
+ * @property {number} apiVersion.
+ * @property {number} apiVersionMinor.
+ * @property {string} environment
+ * @property {boolean} existingPaymentMethodRequired
  */
 var IsReadyToPayRequest = {};
 
@@ -172,21 +190,21 @@ var SwgParameters;
  * Internal parameters.
  *
  * @typedef {{
- *   ampMerchantOrigin: string,
- *   googleTransactionId: string,
- *   startTimeMs: number,
- *   preferredAccountId: string,
- *   userIndex: string,
+ *   ampMerchantOrigin: (string|undefined),
+ *   googleTransactionId: (string|undefined),
+ *   startTimeMs: (number|undefined),
+ *   preferredAccountId: (string|undefined),
+ *   userIndex: (string|undefined),
  * }}
  *
- * @property {string} ampMerchantOrigin The origin of an amp page. This field
+ * @property {(string|undefined)} ampMerchantOrigin The origin of an amp page. This field
  *     should only be trusted if loaded in Google Viewer.
- * @property {string} googleTransactionId The google transaction id to keep
+ * @property {(string|undefined)} googleTransactionId The google transaction id to keep
  *     track of the current transaction.
- * @property {number} startTimeMs The unix time for when an API method
+ * @property {(number|undefined)} startTimeMs The unix time for when an API method
  *     was called.
- * @property {string} preferredAccountId The obfuscated id of the user.
- * @property {string} userIndex The current user's Gaia session cookie
+ * @property {(string|undefined)} preferredAccountId The obfuscated id of the user.
+ * @property {(string|undefined)} userIndex The current user's Gaia session cookie
  *     index, a string (e.g. "0" or "5").
  */
 var InternalParameters;
@@ -306,4 +324,3 @@ var PaymentData = {};
  * }}
  */
 var UserAddress = {};
-

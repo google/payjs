@@ -23,8 +23,8 @@ import {PostMessageService} from './post_message_service.js';
  *
  * @enum {number}
  */
-// Next Id: 7
-export const PostMessageEventType = {
+// Next Id: 9
+const PostMessageEventType = {
   IS_READY_TO_PAY: 6,
   LOG_BUTTON_CLICK: 5,
   LOG_IS_READY_TO_PAY_API: 0,
@@ -32,6 +32,8 @@ export const PostMessageEventType = {
   LOG_RENDER_BUTTON: 2,
   LOG_INLINE_PAYMENT_WIDGET_INITIALIZE: 4,
   LOG_INLINE_PAYMENT_WIDGET_SUBMIT: 3,
+  LOG_INLINE_PAYMENT_WIDGET_DISPLAYED: 7,
+  LOG_INLINE_PAYMENT_WIDGET_HIDDEN: 8,
 };
 
 /**
@@ -39,11 +41,13 @@ export const PostMessageEventType = {
  *
  * @enum {number}
  */
-export const BuyFlowActivityMode = {
+const BuyFlowActivityMode = {
   UNKNOWN_MODE: 0,
   IFRAME: 1,
   POPUP: 2,
   REDIRECT: 3,
+  ANDROID_NATIVE: 4,
+  PAYMENT_HANDLER: 5,
 };
 
 /**
@@ -51,7 +55,7 @@ export const BuyFlowActivityMode = {
  *
  * @enum {number}
  */
-export const PublicErrorCode = {
+const PublicErrorCode = {
   UNKNOWN_ERROR_TYPE: 0,
   INTERNAL_ERROR: 1,
   DEVELOPER_ERROR: 2,
@@ -77,23 +81,21 @@ let environment = null;
 /** @type {?BuyFlowActivityMode} */
 let buyFlowActivityMode = null;
 
-/** @type {?string} */
-let googleTransactionId = null;
-
 /** @type {boolean} */
 let iframeLoaded = false;
 
 /** @type {!Array<!Object>} */
 let buffer = [];
 
-export class PayFrameHelper {
+class PayFrameHelper {
   /**
    * Creates a hidden iframe for logging and appends it to the top level
    * document.
    *
    * @param {string} env
+   * @param {string} googleTransactionId
    */
-  static load(env) {
+  static load(env, googleTransactionId) {
     if (iframe) {
       return;
     }
@@ -101,7 +103,9 @@ export class PayFrameHelper {
     iframe = document.createElement('iframe');
     // Pass in origin because document.referrer inside iframe is empty in
     // certain cases
-    iframe.src = PayFrameHelper.getIframeUrl_(window.location.origin);
+    // Can be replaced by iframe.src=... in non Google context.
+    iframe.src = PayFrameHelper.getIframeUrl_(
+            window.location.origin, Date.now(), googleTransactionId);
     iframe.height = '0';
     iframe.width = '0';
     iframe.style.display = 'none';
@@ -111,6 +115,52 @@ export class PayFrameHelper {
     };
     document.body.appendChild(iframe);
     postMessageService = new PostMessageService(iframe.contentWindow);
+  }
+
+  /**
+   * Sends a message to the iframe and wait for a response.
+   * Uses the responseHandler specified only if the responseType is a match.
+   *
+   * @param {!Object} data
+   * @param {!PostMessageEventType} eventType
+   * @param {string} responseType
+   * @param {function(!Event)} responseHandler
+   */
+  static sendAndWaitForResponse(
+      data, eventType, responseType, responseHandler) {
+    function callback(event) {
+      if (event.data[responseType]) {
+        responseHandler(event);
+        // We only want to process the response from the payframe once.
+        // so stop listening to the event once processed.
+        PayFrameHelper.removeMessageEventListener_(callback);
+      }
+    }
+
+    PayFrameHelper.addMessageEventListener_(callback);
+
+    const postMessageData = Object.assign({'eventType': eventType}, data);
+    PayFrameHelper.postMessage(postMessageData);
+  }
+
+  /**
+   * Add an event listener for listening to messages received.
+   *
+   * @param {function(!Event)} callback
+   * @private
+   */
+  static addMessageEventListener_(callback) {
+    window.addEventListener('message', callback);
+  }
+
+  /**
+   * Remove the event listener for listening to messages.
+   *
+   * @param {function(!Event)} callback
+   * @private
+   */
+  static removeMessageEventListener_(callback) {
+    window.removeEventListener('message', callback);
   }
 
   /**
@@ -126,21 +176,10 @@ export class PayFrameHelper {
     const postMessageData = Object.assign(
         {
           'buyFlowActivityMode': buyFlowActivityMode,
-          'googleTransactionId': googleTransactionId,
         },
         data);
     postMessageService.postMessage(
         postMessageData, PayFrameHelper.getIframeOrigin_());
-  }
-
-  /**
-   *
-   * Sets the google transaction id.
-   *
-   * @param {string} id
-   */
-  static setGoogleTransactionId(id) {
-    googleTransactionId = id;
   }
 
   /**
@@ -169,6 +208,7 @@ export class PayFrameHelper {
     iframe = null;
     buffer.length = 0;
     iframeLoaded = false;
+    buyFlowActivityMode = null;
   }
 
   /**
@@ -225,12 +265,22 @@ export class PayFrameHelper {
    * Returns the payframe URL based on the environment.
    *
    * @param {string} origin The origin that is opening the payframe.
+   * @param {number} initializeTimeMs The time the payframe was initialized.
+   * @param {string} googleTransactionId The transaction id for
+   * this payments client.
    * @return {string}
    * @private
    */
-  static getIframeUrl_(origin) {
-    return PayFrameHelper.getIframeOrigin_() + '/gp/p/ui/payframe?origin=' +
-        encodeURIComponent(window.location.origin);
+  static getIframeUrl_(origin, initializeTimeMs, googleTransactionId) {
+    // TrustedResourceUrl header needs to start with https or '//'.
+    const iframeUrl = `https://pay.${environment === Constants.Environment.SANDBOX ? 'sandbox.' : ''}google.com/gp/p/ui/payframe?origin=${origin}&t=${initializeTimeMs}&gTxnId=${googleTransactionId}`;
+    return iframeUrl;
   }
 }
 
+export {
+  BuyFlowActivityMode,
+  PayFrameHelper,
+  PostMessageEventType,
+  PublicErrorCode,
+};

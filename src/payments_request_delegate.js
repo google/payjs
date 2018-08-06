@@ -18,7 +18,6 @@
 /**
  * @fileoverview Description of this file.
  */
-
 import {Constants} from './constants.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
 
@@ -27,7 +26,7 @@ import {PaymentsClientDelegateInterface} from './payments_client_delegate_interf
  * request.
  * @implements {PaymentsClientDelegateInterface}
  */
-export class PaymentsRequestDelegate {
+class PaymentsRequestDelegate {
   /**
    * @param {string} environment
    */
@@ -49,10 +48,21 @@ export class PaymentsRequestDelegate {
     const paymentRequest = this.createPaymentRequest_(isReadyToPayRequest);
     return new Promise((resolve, reject) => {
       paymentRequest.canMakePayment()
-          .then((/** @type {boolean} */ result) => {
+          .then(result => {
             window.sessionStorage.setItem(
                 Constants.IS_READY_TO_PAY_RESULT_KEY, result.toString());
-            resolve({'result': result});
+            const response = {'result': result};
+            if (isReadyToPayRequest.apiVersion >= 2 &&
+                isReadyToPayRequest.existingPaymentMethodRequired) {
+              // For apiVersion 2, we always use native to only check for
+              // tokenized cards.
+              // For tokenized cards native always does a presence check so
+              // we can say that if canMakePayment is true for native for
+              // tokenizedCards then the user has a payment method which is
+              // present.
+              response['paymentMethodPresent'] = result;
+            }
+            resolve(response);
           })
           .catch(function(err) {
             if (window.sessionStorage.getItem(
@@ -97,7 +107,7 @@ export class PaymentsRequestDelegate {
   createPaymentRequest_(request, environment, currencyCode, totalPrice) {
     let data = {};
     if (request) {
-      data = Object.assign({}, request);
+      data = JSON.parse(JSON.stringify(request));
     }
     // If its a payment data request delete transaction info otherwise we don't
     // care.
@@ -163,3 +173,4 @@ export class PaymentsRequestDelegate {
   }
 }
 
+export {PaymentsRequestDelegate};

@@ -18,14 +18,40 @@
 import {Constants} from './constants.js';
 
 /**
+ * @return {boolean} true if this version of Chrome supports PaymentHandler.
+ */
+function chromeSupportsPaymentHandler() {
+  // Check if feature is enabled for user
+  if (typeof google == 'undefined' ||
+      !null) {
+    return false;
+  }
+
+  // Payment handler isn't supported on mobile
+  const mobilePlatform = window.navigator.userAgent.match(
+      /Android|iPhone|iPad|iPod|BlackBerry|IEMobile/i);
+  if (mobilePlatform != null) {
+    return false;
+  }
+
+  const chromeVersion = window.navigator.userAgent.match(/Chrome\/([0-9]+)\./i);
+  return 'PaymentRequest' in window && chromeVersion != null &&
+      Number(chromeVersion[1]) >= 68 &&
+      window.navigator.vendor == 'Google Inc.';
+}
+
+/**
  * @return {boolean} true if this version of Chrome supports PaymentRequest.
  */
-export function chromeSupportsPaymentRequest() {
+function chromeSupportsPaymentRequest() {
   // Opera uses chrome as rendering engine and sends almost the exact same
   // user agent as chrome thereby fooling us on android.
   const isOpera = window.navigator.userAgent.indexOf('OPR/') != -1;
   if (isOpera) {
     return false;
+  }
+  if (chromeSupportsPaymentHandler()) {
+    return true;
   }
   const androidPlatform = window.navigator.userAgent.match(/Android/i);
   const chromeVersion = window.navigator.userAgent.match(/Chrome\/([0-9]+)\./i);
@@ -41,10 +67,37 @@ export function chromeSupportsPaymentRequest() {
  *
  * @return {boolean} true if the merchant only supports tokenized cards.
  */
-export function doesMerchantSupportOnlyTokenizedCards(isReadyToPayRequest) {
+function doesMerchantSupportOnlyTokenizedCards(isReadyToPayRequest) {
+  if (isReadyToPayRequest.apiVersion >= 2) {
+    const allowedAuthMethods =
+        extractAllowedAuthMethodsForCards_(isReadyToPayRequest);
+    if (allowedAuthMethods && allowedAuthMethods.length == 1 &&
+        allowedAuthMethods[0] == Constants.AuthMethod.CRYPTOGRAM_3DS) {
+      return true;
+    }
+  }
   return isReadyToPayRequest.allowedPaymentMethods.length == 1 &&
       isReadyToPayRequest.allowedPaymentMethods[0] ==
       Constants.PaymentMethod.TOKENIZED_CARD;
+}
+
+/**
+ * @param {!IsReadyToPayRequest} isReadyToPayRequest
+ * @param {Constants.AuthMethod} apiV2AuthMethod
+ *
+ * @return {boolean} true if the merchant supports pan cards.
+ */
+function apiV2DoesMerchantSupportSpecifiedCardType(
+    isReadyToPayRequest, apiV2AuthMethod) {
+  if (isReadyToPayRequest.apiVersion >= 2) {
+    const allowedAuthMethods =
+        extractAllowedAuthMethodsForCards_(isReadyToPayRequest);
+    if (allowedAuthMethods && allowedAuthMethods.includes(apiV2AuthMethod)) {
+      return true;
+    }
+    return false;
+  }
+  return false;
 }
 
 /**
@@ -56,7 +109,7 @@ export function doesMerchantSupportOnlyTokenizedCards(isReadyToPayRequest) {
  * @return {?string} null if current context is secure, otherwise return error
  * message.
  */
-export function validateSecureContext() {
+function validateSecureContext() {
   if (window.location.hostname.endsWith(Constants.TRUSTED_DOMAIN)) {
     // This is for local development.
     return null;
@@ -76,7 +129,7 @@ export function validateSecureContext() {
  *
  * @param {!PaymentOptions} paymentOptions
  */
-export function validatePaymentOptions(paymentOptions) {
+function validatePaymentOptions(paymentOptions) {
   if (paymentOptions.environment &&
       !Object.values(Constants.Environment)
            .includes(paymentOptions.environment)) {
@@ -92,9 +145,41 @@ export function validatePaymentOptions(paymentOptions) {
  * @param {!IsReadyToPayRequest} isReadyToPayRequest
  * @return {?string} errorMessage if the request is invalid.
  */
-export function validateIsReadyToPayRequest(isReadyToPayRequest) {
+function validateIsReadyToPayRequest(isReadyToPayRequest) {
   if (!isReadyToPayRequest) {
     return 'isReadyToPayRequest must be set!';
+  } else if (isReadyToPayRequest.apiVersion >= 2) {
+    if (!('apiVersionMinor' in isReadyToPayRequest)) {
+      return 'apiVersionMinor must be set!';
+    }
+    if (!isReadyToPayRequest.allowedPaymentMethods ||
+        !Array.isArray(isReadyToPayRequest.allowedPaymentMethods) ||
+        isReadyToPayRequest.allowedPaymentMethods.length == 0) {
+      return 'for v2 allowedPaymentMethods must be set to an array containing a list of accepted payment methods';
+    }
+    for (var i = 0; i < isReadyToPayRequest.allowedPaymentMethods.length; i++) {
+      let allowedPaymentMethod = isReadyToPayRequest.allowedPaymentMethods[i];
+      if (allowedPaymentMethod['type'] == Constants.PaymentMethod.CARD) {
+        if (!allowedPaymentMethod['parameters']) {
+          return 'Field parameters must be setup in each allowedPaymentMethod';
+        }
+        var allowedCardNetworks =
+            allowedPaymentMethod['parameters']['allowedCardNetworks'];
+        if (!allowedCardNetworks || !Array.isArray(allowedCardNetworks) ||
+            allowedCardNetworks.length == 0) {
+          return 'allowedCardNetworks must be setup in parameters for type CARD';
+        }
+        var allowedAuthMethods =
+            allowedPaymentMethod['parameters']['allowedAuthMethods'];
+        if (!allowedAuthMethods || !Array.isArray(allowedAuthMethods) ||
+            allowedAuthMethods.length == 0 ||
+            !allowedAuthMethods.every(isAuthMethodValid)) {
+          return 'allowedAuthMethods must be setup in parameters for type \'CARD\' ' +
+              ' and must contain \'CRYPTOGRAM_3DS\' and/or \'PAN_ONLY\'';
+        }
+      }
+    }
+    return null;
   } else if (
       !isReadyToPayRequest.allowedPaymentMethods ||
       !Array.isArray(isReadyToPayRequest.allowedPaymentMethods) ||
@@ -112,8 +197,18 @@ export function validateIsReadyToPayRequest(isReadyToPayRequest) {
  * @param {string} paymentMethod
  * @return {boolean} if the current payment method is valid.
  */
-export function isPaymentMethodValid(paymentMethod) {
+function isPaymentMethodValid(paymentMethod) {
   return Object.values(Constants.PaymentMethod).includes(paymentMethod);
+}
+
+/**
+ * Validate the auth method.
+ *
+ * @param {string} authMethod
+ * @return {boolean} if the current auth method is valid.
+ */
+function isAuthMethodValid(authMethod) {
+  return Object.values(Constants.AuthMethod).includes(authMethod);
 }
 
 /**
@@ -122,7 +217,7 @@ export function isPaymentMethodValid(paymentMethod) {
  * @param {!PaymentDataRequest} paymentDataRequest
  * @return {?string} errorMessage if the request is invalid.
  */
-export function validatePaymentDataRequest(paymentDataRequest) {
+function validatePaymentDataRequest(paymentDataRequest) {
   if (!paymentDataRequest) {
     return 'paymentDataRequest must be set!';
   }
@@ -164,3 +259,34 @@ function validatePaymentDataRequestForSwg(swgParameters) {
   return null;
 }
 
+/**
+ * Returns the allowedAuthMethods for a card from the request.
+ *
+ * @param {!IsReadyToPayRequest} isReadyToPayRequest
+ * @return {?Array<string>}
+ * @private
+ */
+function extractAllowedAuthMethodsForCards_(isReadyToPayRequest) {
+  if (isReadyToPayRequest.allowedPaymentMethods) {
+    for (var i = 0; i < isReadyToPayRequest.allowedPaymentMethods.length; i++) {
+      const allowedPaymentMethod = isReadyToPayRequest.allowedPaymentMethods[i];
+      if (allowedPaymentMethod.type == Constants.PaymentMethod.CARD &&
+          allowedPaymentMethod.parameters) {
+        return allowedPaymentMethod.parameters['allowedAuthMethods'];
+      }
+    }
+  }
+  return null;
+}
+
+export {
+  apiV2DoesMerchantSupportSpecifiedCardType,
+  chromeSupportsPaymentHandler,
+  chromeSupportsPaymentRequest,
+  doesMerchantSupportOnlyTokenizedCards,
+  isPaymentMethodValid,
+  validateIsReadyToPayRequest,
+  validatePaymentOptions,
+  validatePaymentDataRequest,
+  validateSecureContext
+};

@@ -48,4 +48,3 @@ google.payments.api.PaymentsClient.prototype.loadPaymentData = function() {};
  */
 google.payments.api.PaymentsClient.prototype.prefetchPaymentData =
     function() {};
-

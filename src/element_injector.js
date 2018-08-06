@@ -15,13 +15,12 @@
  * limitations under the License.
  */
 
-
 /**
  * Injects the provided style sheet to the document head.
  * @param {string} styleText The stylesheet to be injected.
  * @return {!Element}
  */
-export function injectStyleSheet(styleText) {
+function injectStyleSheet(styleText) {
   const styleElement = document.createElement('style');
   styleElement.type = 'text/css';
   styleElement.textContent = styleText;
@@ -33,7 +32,7 @@ export function injectStyleSheet(styleText) {
  * Injects the pay with google iframe.
  * @return {!{container: !Element, iframe:!HTMLIFrameElement}}
  */
-export function injectIframe() {
+function injectIframe() {
   const container = document.createElement('div');
   container.classList.add('dialogContainer');
   const iframeContainer = document.createElement('div');
@@ -50,3 +49,7 @@ export function injectIframe() {
   return {'container': container, 'iframe': iframe};
 }
 
+export {
+  injectStyleSheet,
+  injectIframe,
+};
