@@ -125,16 +125,14 @@ class PaymentsAsyncClient {
 
     const isReadyToPayPromise = this.isReadyToPay_(isReadyToPayRequest);
 
-    isReadyToPayPromise
-        .then(
-            response => {
-              PayFrameHelper.postMessage({
-                'eventType': PostMessageEventType.LOG_IS_READY_TO_PAY_API,
-                'clientLatencyStartMs': startTimeMs,
-                'isReadyToPayApiResult': response['result'],
-              });
-              return response;
-            });
+    isReadyToPayPromise.then(response => {
+      PayFrameHelper.postMessage({
+        'eventType': PostMessageEventType.LOG_IS_READY_TO_PAY_API,
+        'clientLatencyStartMs': startTimeMs,
+        'isReadyToPayApiResponse': response,
+      });
+      return response;
+    });
     return isReadyToPayPromise;
   }
 
