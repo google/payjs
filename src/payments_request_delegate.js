@@ -20,6 +20,7 @@
  */
 import {Constants} from './constants.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
+import {chromeSupportsPaymentHandler} from './validator.js';
 
 /**
  * An implementation of PaymentsClientDelegateInterface that leverages payment
@@ -109,9 +110,10 @@ class PaymentsRequestDelegate {
     if (request) {
       data = JSON.parse(JSON.stringify(request));
     }
-    // If its a payment data request delete transaction info otherwise we don't
-    // care.
-    delete data['transactionInfo'];
+    if (!chromeSupportsPaymentHandler()) {
+      // If its an android chrome payment data request delete transaction.
+      delete data['transactionInfo'];
+    }
 
     // Only set the apiVersion if the merchant doesn't set it.
     if (!data['apiVersion']) {
