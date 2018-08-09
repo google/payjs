@@ -5,6 +5,9 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
+# LINT.IfChange
+# LINT.ThenChange(//depot/google3/java/com/google/wallet/boq/instantbuy/frontend/http/config/experiments.pi)
+
 exports_files(["LICENSE"])
 
 closure_js_binary(
@@ -42,6 +45,7 @@ closure_js_library(
         "JSC_INEXISTENT_PROPERTY",
         "JSC_INVALID_OPERAND_TYPE",
         "JSC_STRICT_INEXISTENT_PROPERTY",
+        "JSC_TYPE_MISMATCH",
         "JSC_UNKNOWN_EXPR_TYPE",
         "JSC_UNREACHABLE_CODE",
         "JSC_UNUSED_PRIVATE_PROPERTY",
