@@ -159,7 +159,8 @@ class PaymentsWebActivityDelegate {
       const userAgent = window.navigator.userAgent;
       const isIosGsa = userAgent.indexOf('GSA/') > 0 &&
           userAgent.indexOf(BrowserUserAgent.SAFARI) > 0;
-      if (isIosGsa) {
+      // pop up in IGSA doesn't work.
+      if (isIosGsa && !this.useIframe_) {
         resolve({'result': false});
         return;
       }
