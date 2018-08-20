@@ -110,7 +110,8 @@ class PaymentsRequestDelegate {
     if (request) {
       data = JSON.parse(JSON.stringify(request));
     }
-    if (!chromeSupportsPaymentHandler()) {
+    if (!chromeSupportsPaymentHandler() &&
+        !null) {
       // If its an android chrome payment data request delete transaction.
       delete data['transactionInfo'];
     }
