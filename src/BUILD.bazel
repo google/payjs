@@ -5,8 +5,8 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
-# LINT.IfChange
-# LINT.ThenChange(//depot/google3/java/com/google/wallet/boq/instantbuy/frontend/http/config/experiments.pi)
+# The experiment flag is controlled in //depot/google3/java/com/google/wallet/boq/instantbuy/frontend/http/config/experiments.pi
+# Please make sure your new change here is pushed in the target environment before you flip the flag in experiments.pi.
 
 exports_files(["LICENSE"])
 
