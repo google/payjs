@@ -185,6 +185,7 @@ Constants.BUTTON_STYLE = `
   min-height: 40px;
   outline: 0px;
   padding: 11px 24px;
+  width: 100%;
 }
 
 .black {
@@ -199,7 +200,6 @@ Constants.BUTTON_STYLE = `
 
 .short {
   min-width: 90px;
-  width: 160px;
 }
 
 .black.short {
