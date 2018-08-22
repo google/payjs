@@ -120,6 +120,12 @@ class PaymentsRequestDelegate {
     if (!data['apiVersion']) {
       data['apiVersion'] = 1;
     }
+
+    // Add allowedPaymentMethods for swg to get through gms core validation.
+    if (data['swg']) {
+      data['allowedPaymentMethods'] = [Constants.PaymentMethod.CARD];
+    }
+
     if (environment && environment == Constants.Environment.TEST) {
       data['environment'] = environment;
     }
@@ -152,10 +158,14 @@ class PaymentsRequestDelegate {
    * @private
    */
   loadPaymentDataThroughPaymentRequest_(paymentDataRequest) {
+    const currencyCode = (paymentDataRequest.transactionInfo &&
+                          paymentDataRequest.transactionInfo.currencyCode) ||
+        undefined;
+    const totalPrice = (paymentDataRequest.transactionInfo &&
+                        paymentDataRequest.transactionInfo.totalPrice) ||
+        undefined;
     const paymentRequest = this.createPaymentRequest_(
-        paymentDataRequest, this.environment_,
-        paymentDataRequest.transactionInfo.currencyCode,
-        paymentDataRequest.transactionInfo.totalPrice);
+        paymentDataRequest, this.environment_, currencyCode, totalPrice);
     this.callback_(
         /** @type{!Promise<!PaymentData>} */
         (paymentRequest.show()

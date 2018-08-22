@@ -292,11 +292,11 @@ class PaymentsAsyncClient {
     this.loadPaymentDataApiStartTimeMs_ = Date.now();
     this.assignInternalParams_(paymentDataRequest);
     // We want to fall back to the web delegate in three cases:
-    // 1) SwG request
-    // 2) If isReadyToPay bit (from canMakePayment) is explicitly set to false
-    // 3) If payment handler is supported and isReadyToPay bit is not explicitly
+    // 1) If isReadyToPay bit (from canMakePayment) is explicitly set to false
+    // 2) If payment handler is supported and isReadyToPay bit is not explicitly
     // set to true (fallback to web if isReadyToPay wasn't called for PH)
-    if (paymentDataRequest.swg || isReadyToPayResult === 'false' ||
+    if ((!null && paymentDataRequest.swg) ||
+        isReadyToPayResult === 'false' ||
         (chromeSupportsPaymentHandler() && isReadyToPayResult !== 'true')) {
       this.webActivityDelegate_.loadPaymentData(paymentDataRequest);
     } else {
