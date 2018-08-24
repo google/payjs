@@ -305,6 +305,14 @@ class PaymentsWebActivityDelegate {
    * @return {string} The hosting page url
    */
   getHostingPageUrl_() {
+    // In Tin tests, the hosting page is requested from
+    // /testing/buyflow/merchantdemo.html and is accessed relatively since the
+    // base path is unknown ahead of time.
+    if (this.environment_ == Constants.Environment.TIN) {
+      // There is no /gp/p prefix since multilogin prefixes is broken in Tin:
+      // http://yaqs/4912322941550592
+      return '/ui/pay';
+    }
     return this.getBasePath_() + '/ui/pay';
   }
 

@@ -26,6 +26,7 @@ Constants.Environment = {
   PRODUCTION: 'PRODUCTION',
   TEST: 'TEST',
   SANDBOX: 'SANDBOX',
+  TIN: 'TIN',
 };
 
 /**
