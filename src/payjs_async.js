@@ -19,9 +19,10 @@ import {Constants} from './constants.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
 import {PaymentsRequestDelegate} from './payments_request_delegate.js';
 import {PaymentsWebActivityDelegate} from './payments_web_activity_delegate.js';
+import {UpiHandler} from './upi_handler.js';
 import uuid from '../third_party/random_uuid/Random.uuid.js';
 import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType, PublicErrorCode} from './pay_frame_helper.js';
-import {apiV2DoesMerchantSupportSpecifiedCardType, chromeSupportsPaymentHandler, chromeSupportsPaymentRequest, doesMerchantSupportOnlyTokenizedCards, validatePaymentOptions, validateIsReadyToPayRequest, validatePaymentDataRequest, validateSecureContext} from './validator.js';
+import {apiV2DoesMerchantSupportSpecifiedCardType, chromeSupportsPaymentHandler, chromeSupportsPaymentRequest, doesMerchantSupportOnlyTokenizedCards, getUpiPaymentMethod, validatePaymentOptions, validateIsReadyToPayRequest, validatePaymentDataRequest, validateSecureContext} from './validator.js';
 import {createButtonHelper} from './button.js';
 
 const TRUSTED_DOMAINS = [
@@ -78,6 +79,8 @@ class PaymentsAsyncClient {
     this.delegate_ = paymentRequestSupported && !opt_useIframe ?
         new PaymentsRequestDelegate(this.environment_) :
         this.webActivityDelegate_;
+
+    this.upiHandler_ = new UpiHandler();
 
     this.webActivityDelegate_.onResult(this.onResult_.bind(this));
     this.delegate_.onResult(this.onResult_.bind(this));
@@ -146,6 +149,9 @@ class PaymentsAsyncClient {
    * @private
    */
   isReadyToPay_(isReadyToPayRequest) {
+    if (this.upiHandler_.isUpiRequest(isReadyToPayRequest)) {
+      return this.upiHandler_.isReadyToPay(isReadyToPayRequest);
+    }
     if (chromeSupportsPaymentRequest()) {
       if (isReadyToPayRequest.apiVersion >= 2) {
         return this.isReadyToPayApiV2ForChromePaymentRequest_(
@@ -284,6 +290,16 @@ class PaymentsAsyncClient {
           'statusMessage': errorMessage
         });
       }));
+      return;
+    }
+
+    // Handler for UPI PaymentMethod
+    // Currently we don't support UPI along with other payment methods, if
+    // UPI is in payment methods then we assume it is UPI only.
+    const upiPaymentMethod = getUpiPaymentMethod(paymentDataRequest);
+    if (upiPaymentMethod) {
+      this.upiHandler_.loadPaymentData(
+          paymentDataRequest, upiPaymentMethod, this.onResult_.bind(this));
       return;
     }
 

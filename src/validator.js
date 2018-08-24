@@ -240,7 +240,53 @@ function validatePaymentDataRequest(paymentDataRequest) {
     return 'totalPrice in transactionInfo must be set when' +
         ' totalPriceStatus is ESTIMATED or FINAL!';
   }
+
+  // Validate payment data request for UPI payment method
+  const allowedPaymentMethod = getUpiPaymentMethod(paymentDataRequest);
+  if (allowedPaymentMethod) {
+    if (!allowedPaymentMethod['parameters']) {
+      return 'parameters must be set in allowedPaymentMethod!';
+    }
+
+    var parameters = allowedPaymentMethod['parameters'];
+    if (!parameters['payeeVpa']) {
+      return 'payeeVpa in allowedPaymentMethod parameters must be set!';
+    } else if (!parameters['payeeName']) {
+      return 'payeeName in allowedPaymentMethod parameters must be set!';
+    } else if (!parameters['referenceUrl']) {
+      return 'referenceUrl in allowedPaymentMethod parameters must be set!';
+    } else if (!parameters['mcc']) {
+      return 'mcc in allowedPaymentMethod parameters must be set!';
+    } else if (!parameters['transactionReferenceId']) {
+      return 'transactionReferenceId in allowedPaymentMethod parameters' +
+          ' must be set!';
+    }
+
+    if (paymentDataRequest['transactionInfo']['currencyCode'] !== 'INR') {
+      return 'currencyCode in transactionInfo must be set to INR!';
+    } else if (
+        paymentDataRequest['transactionInfo']['totalPriceStatus'] !== 'FINAL') {
+      return 'totalPriceStatus in transactionInfo must be set to FINAL!';
+    } else if (!paymentDataRequest['transactionInfo']['transactionNote']) {
+      return 'transactionNote in transactionInfo must be set!';
+    }
+  }
   return null;
+}
+
+/**
+ * Returns upi payment method object if it exists in allowed payment methods
+ * or null if it doesn't
+ *
+ * @param {!IsReadyToPayRequest|!PaymentDataRequest} request
+ * @return {?Object}
+ */
+function getUpiPaymentMethod(request) {
+  if (!chromeSupportsPaymentRequest() || request.apiVersion < 2 ||
+      !request.allowedPaymentMethods) {
+    return null;
+  }
+  return getAllowedPaymentMethodForType_(request, Constants.PaymentMethod.UPI);
 }
 
 /**
@@ -268,12 +314,28 @@ function validatePaymentDataRequestForSwg(swgParameters) {
  */
 function extractAllowedAuthMethodsForCards_(isReadyToPayRequest) {
   if (isReadyToPayRequest.allowedPaymentMethods) {
-    for (var i = 0; i < isReadyToPayRequest.allowedPaymentMethods.length; i++) {
-      const allowedPaymentMethod = isReadyToPayRequest.allowedPaymentMethods[i];
-      if (allowedPaymentMethod.type == Constants.PaymentMethod.CARD &&
-          allowedPaymentMethod.parameters) {
-        return allowedPaymentMethod.parameters['allowedAuthMethods'];
-      }
+    const allowedPaymentMethod = getAllowedPaymentMethodForType_(
+        isReadyToPayRequest, Constants.PaymentMethod.CARD);
+    if (allowedPaymentMethod && allowedPaymentMethod.parameters) {
+      return allowedPaymentMethod.parameters['allowedAuthMethods'];
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {!IsReadyToPayRequest} isReadyToPayRequest
+ * @param {string} paymentMethodType
+ * @return {?PaymentMethod} Return first payment method for the given type,
+ *     return null if not found.
+ * @private
+ */
+function getAllowedPaymentMethodForType_(
+    isReadyToPayRequest, paymentMethodType) {
+  for (var i = 0; i < isReadyToPayRequest.allowedPaymentMethods.length; i++) {
+    const allowedPaymentMethod = isReadyToPayRequest.allowedPaymentMethods[i];
+    if (allowedPaymentMethod.type == paymentMethodType) {
+      return allowedPaymentMethod;
     }
   }
   return null;
@@ -284,6 +346,7 @@ export {
   chromeSupportsPaymentHandler,
   chromeSupportsPaymentRequest,
   doesMerchantSupportOnlyTokenizedCards,
+  getUpiPaymentMethod,
   isPaymentMethodValid,
   validateIsReadyToPayRequest,
   validatePaymentOptions,

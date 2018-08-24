@@ -37,6 +37,7 @@ Constants.Environment = {
 Constants.PaymentMethod = {
   CARD: 'CARD',
   TOKENIZED_CARD: 'TOKENIZED_CARD',
+  UPI: 'UPI',
 };
 
 /**
@@ -101,8 +102,15 @@ Constants.Id = {
 };
 
 /** @const {string} */
+Constants.STORAGE_KEY_PREFIX = 'google.payments.api.storage';
+
+/** @const {string} */
 Constants.IS_READY_TO_PAY_RESULT_KEY =
-    'google.payments.api.storage.isreadytopay.result';
+    Constants.STORAGE_KEY_PREFIX + '.isreadytopay.result';
+
+/** @const {string} */
+Constants.UPI_CAN_MAKE_PAYMENT_CACHE_KEY =
+    Constants.STORAGE_KEY_PREFIX + '.upi.canMakePaymentCache';
 
 
 Constants.IFRAME_STYLE_CLASS = 'dialog';
