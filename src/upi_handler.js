@@ -65,36 +65,50 @@ class UpiHandler {
    *     done.
    */
   loadPaymentData(paymentDataRequest, upiPaymentMethod, onResultCallback) {
-    const supportedInstruments = [{
-      'supportedMethods': ['https://tez.google.com/pay'],
-      'data': {
-        'pa': upiPaymentMethod['parameters']['payeeVpa'],
-        'pn': upiPaymentMethod['parameters']['payeeName'],
-        'tr': upiPaymentMethod['parameters']['transactionReferenceId'],
-        'url': upiPaymentMethod['parameters']['referenceUrl'],
-        'mc': upiPaymentMethod['parameters']['mcc'],
-        'tn': paymentDataRequest['transactionInfo']['transactionNote'],
-      },
-    }];
+    const parameters = upiPaymentMethod['parameters'];
+    const transactionInfo = paymentDataRequest['transactionInfo'];
+    const supportedInstruments = null ?
+        [{
+          // This is the url for Tez teamfood release.
+          'supportedMethods': ['https://pwp-server.appspot.com/pay-teamfood'],
+          'data': {
+            'pa': 'redbus@axisbank',
+            'pn': parameters['payeeName'],
+            'tr': parameters['transactionReferenceId'],
+            'url': parameters['referenceUrl'],
+            'mc': '4131',
+            'tn': 'Purchase in Merchant',
+          },
+        }] :
+        [{
+          'supportedMethods': ['https://tez.google.com/pay'],
+          'data': {
+            'pa': parameters['payeeVpa'],
+            'pn': parameters['payeeName'],
+            'tr': parameters['transactionReferenceId'],
+            'url': parameters['referenceUrl'],
+            'mc': parameters['mcc'],
+            'tn': transactionInfo['transactionNote'],
+          },
+        }];
 
-    if (upiPaymentMethod['parameters']['transactionId']) {
-      supportedInstruments[0]['data']['tid'] =
-          upiPaymentMethod['parameters']['transactionId'];
+    if (parameters['transactionId']) {
+      supportedInstruments[0]['data']['tid'] = parameters['transactionId'];
     }
 
     const details = {
       'total': {
         'label': 'Total',
         'amount': {
-          'currency': paymentDataRequest['transactionInfo']['currencyCode'],
-          'value': paymentDataRequest['transactionInfo']['totalPrice'],
+          'currency': transactionInfo['currencyCode'],
+          'value': transactionInfo['totalPrice'],
         },
       },
       'displayItems': [{
         'label': 'Original Amount',
         'amount': {
-          'currency': paymentDataRequest['transactionInfo']['currencyCode'],
-          'value': paymentDataRequest['transactionInfo']['totalPrice'],
+          'currency': transactionInfo['currencyCode'],
+          'value': transactionInfo['totalPrice'],
         },
       }],
     };
@@ -178,7 +192,9 @@ class UpiHandler {
    */
   redirectToGooglePlay_() {
     window.location.replace(
-        'https://play.google.com/store/apps/details?id=com.google.android.apps.nbu.paisa.user');
+        null ?
+            'https://play.google.com/store/apps/details?id=com.google.android.apps.nbu.paisa.user.teamfood ' :  // NOLINT
+            'https://play.google.com/store/apps/details?id=com.google.android.apps.nbu.paisa.user');  // NOLINT
     return Promise.reject(
         {'errorMessage': 'Cannot redirect to Tez page in Google Play.'});
   }
