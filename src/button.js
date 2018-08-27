@@ -44,7 +44,8 @@ function createButtonHelper(options = {}) {
     options.buttonColor = Constants.ButtonColor.BLACK;
   }
   const classForGpayButton = getClassForGpayButton_(options);
-  button.setAttribute('class', `gpay-button ${classForGpayButton}`);
+  button.setAttribute(
+      'class', `${Constants.GPAY_BUTTON_CLASS} ${classForGpayButton}`);
   addButtonEventListenersForStyling(button);
 
   if (options.onClick) {

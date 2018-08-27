@@ -180,8 +180,15 @@ Constants.BUTTON_LOCALE_TO_MIN_WIDTH = {
   'zh': 156,
 };
 
+/**
+ * Class used for the gpay button.
+ *
+ * @const {string}
+ */
+Constants.GPAY_BUTTON_CLASS = 'gpay-button';
+
 Constants.BUTTON_STYLE = `
-.gpay-button {
+.${Constants.GPAY_BUTTON_CLASS} {
   background-origin: content-box;
   background-position: center center;
   background-repeat: no-repeat;
@@ -197,45 +204,45 @@ Constants.BUTTON_STYLE = `
   width: 100%;
 }
 
-.black {
+.${Constants.GPAY_BUTTON_CLASS}.black {
   background-color: #000;
   box-shadow: none;
   padding: 12px 24px 10px;
 }
 
-.white {
+.${Constants.GPAY_BUTTON_CLASS}.white {
   background-color: #fff;
 }
 
-.short {
+.${Constants.GPAY_BUTTON_CLASS}.short {
   min-width: 90px;
 }
 
-.black.short {
+.${Constants.GPAY_BUTTON_CLASS}.black.short {
   background-image: url(https://www.gstatic.com/instantbuy/svg/dark_gpay.svg);
 }
 
-.white.short {
+.${Constants.GPAY_BUTTON_CLASS}.white.short {
   background-image: url(https://www.gstatic.com/instantbuy/svg/light_gpay.svg);
 }
 
-.black.active {
+.${Constants.GPAY_BUTTON_CLASS}.black.active {
   background-color: #5f6368;
 }
 
-.black.hover {
+.${Constants.GPAY_BUTTON_CLASS}.black.hover {
   background-color: #3c4043;
 }
 
-.white.active {
+.${Constants.GPAY_BUTTON_CLASS}.white.active {
   background-color: #fff;
 }
 
-.white.focus {
+.${Constants.GPAY_BUTTON_CLASS}.white.focus {
   box-shadow: #e8e8e8 0 1px 1px 0, #e8e8e8 0 1px 3px;
 }
 
-.white.hover {
+.${Constants.GPAY_BUTTON_CLASS}.white.hover {
   background-color: #f8f8f8;
 }
 `;
