@@ -140,6 +140,7 @@ function getLongGPayButtonCss_() {
   return `
     .long {
       min-width: ${minWidth}px;
+      width: 240px;
     }
 
     .white.long {

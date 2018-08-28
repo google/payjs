@@ -201,7 +201,6 @@ Constants.BUTTON_STYLE = `
   min-height: 40px;
   outline: 0px;
   padding: 11px 24px;
-  width: 100%;
 }
 
 .${Constants.GPAY_BUTTON_CLASS}.black {
@@ -216,6 +215,7 @@ Constants.BUTTON_STYLE = `
 
 .${Constants.GPAY_BUTTON_CLASS}.short {
   min-width: 90px;
+  width: 160px;
 }
 
 .${Constants.GPAY_BUTTON_CLASS}.black.short {
