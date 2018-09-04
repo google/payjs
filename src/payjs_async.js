@@ -311,7 +311,8 @@ class PaymentsAsyncClient {
     // 1) If isReadyToPay bit (from canMakePayment) is explicitly set to false
     // 2) If payment handler is supported and isReadyToPay bit is not explicitly
     // set to true (fallback to web if isReadyToPay wasn't called for PH)
-    if (isReadyToPayResult === 'false' ||
+    if ((isReadyToPayResult === 'false' &&
+         !null) ||
         (chromeSupportsPaymentHandler() && isReadyToPayResult !== 'true')) {
       this.webActivityDelegate_.loadPaymentData(paymentDataRequest);
     } else {
