@@ -307,13 +307,10 @@ class PaymentsAsyncClient {
         window.sessionStorage.getItem(Constants.IS_READY_TO_PAY_RESULT_KEY);
     this.loadPaymentDataApiStartTimeMs_ = Date.now();
     this.assignInternalParams_(paymentDataRequest);
-    // We want to fall back to the web delegate in three cases:
-    // 1) If isReadyToPay bit (from canMakePayment) is explicitly set to false
-    // 2) If payment handler is supported and isReadyToPay bit is not explicitly
-    // set to true (fallback to web if isReadyToPay wasn't called for PH)
-    if ((isReadyToPayResult === 'false' &&
-         !null) ||
-        (chromeSupportsPaymentHandler() && isReadyToPayResult !== 'true')) {
+    // We want to fall back to the web delegate if payment handler is supported
+    // and isReadyToPay bit is not explicitly set to true (fallback to web if
+    // isReadyToPay wasn't called for PH)
+    if (chromeSupportsPaymentHandler() && isReadyToPayResult !== 'true') {
       this.webActivityDelegate_.loadPaymentData(paymentDataRequest);
     } else {
       this.delegate_.loadPaymentData(paymentDataRequest);
