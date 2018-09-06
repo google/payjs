@@ -280,12 +280,14 @@ class PaymentsWebActivityDelegate {
    */
   getBasePath_() {
     var baseDomain;
-    if (this.environment_ == Constants.Environment.SANDBOX) {
-      baseDomain = 'https://pay.sandbox.google.com';
+    if (this.environment_ == Constants.Environment.PREPROD) {
+      baseDomain = 'pay-preprod.sandbox';
+    } else if (this.environment_ == Constants.Environment.SANDBOX) {
+      baseDomain = 'pay.sandbox';
     } else {
-      baseDomain = 'https://pay.google.com';
+      baseDomain = 'pay';
     }
-    return baseDomain + "/gp/p";
+    return 'https://' + baseDomain + '.google.com/gp/p';
   }
 
   /**
@@ -327,8 +329,9 @@ class PaymentsWebActivityDelegate {
     // TODO: These should be compile time constants and not dependent
     // on the environment.
     let iframeUrl = `https://pay.google.com/gp/p/ui/pay?origin=${origin}`;
-    if (environment == Constants.Environment.SANDBOX) {
-      iframeUrl = `https://pay.sandbox.google.com/gp/p/ui/pay?origin=${origin}`;
+    if (environment == Constants.Environment.SANDBOX ||
+        environment == Constants.Environment.PREPROD) {
+      iframeUrl =   `https://pay'+  (environment == Constants.Environment.PREPROD ? '-preprod' : '')+  '.sandbox.google.com/gp/p/ui/pay?origin=${origin}`;
     }
     return iframeUrl;
   }
