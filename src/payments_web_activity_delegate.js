@@ -172,7 +172,8 @@ class PaymentsWebActivityDelegate {
       const isSupported = userAgent.indexOf(BrowserUserAgent.CHROME) > 0 ||
           userAgent.indexOf(BrowserUserAgent.FIREFOX) > 0 ||
           userAgent.indexOf(BrowserUserAgent.SAFARI) > 0;
-      if (isSupported && isReadyToPayRequest.apiVersion >= 2) {
+      if (isSupported && isReadyToPayRequest.apiVersion >= 2 &&
+          isReadyToPayRequest.existingPaymentMethodRequired) {
         isReadyToPayRequest.environment = this.environment_;
         PayFrameHelper.sendAndWaitForResponse(
             isReadyToPayRequest, PostMessageEventType.IS_READY_TO_PAY,
