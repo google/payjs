@@ -27,9 +27,12 @@ class PaymentsClient {
    * @param {boolean=} opt_useIframe
    */
   constructor(paymentOptions = {}, opt_useIframe) {
+    this.mergedPaymentOptions_ =
+        Object.assign({}, window['gpayInitParams'], paymentOptions);
     /** @private @const {!PaymentsAsyncClient} */
     this.asyncClient_ = new PaymentsAsyncClient(
-        paymentOptions, this.payComplete_.bind(this), opt_useIframe);
+        this.mergedPaymentOptions_, this.payComplete_.bind(this),
+        opt_useIframe);
 
     /** @private {?function(!Promise<!PaymentData>)} */
     this.pending_ = null;

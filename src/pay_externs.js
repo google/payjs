@@ -52,7 +52,8 @@ var PaymentMethod;
  *   apiVersion: (?number|undefined),
  *   apiVersionMinor: (?number|undefined),
  *   environment: (?string|undefined),
- *   existingPaymentMethodRequired: (boolean|undefined)
+ *   existingPaymentMethodRequired: (boolean|undefined),
+ *   merchantInfo: (?MerchantInfo|undefined),
  * }}
  *
  * @property {Array<string>} allowedPaymentMethods The allowedPaymentMethods can
@@ -61,6 +62,7 @@ var PaymentMethod;
  * @property {number} apiVersionMinor.
  * @property {string} environment
  * @property {boolean} existingPaymentMethodRequired
+ * @property {MerchantInfo} merchantInfo
  */
 var IsReadyToPayRequest = {};
 
@@ -76,6 +78,7 @@ var IsReadyToPayRequest = {};
  *   cardRequirements: ?CardRequirements,
  *   phoneNumberRequired: (?boolean|undefined),
  *   emailRequired: (?boolean|undefined),
+ *   merchantInfo: (?MerchantInfo|undefined),
  *   shippingAddressRequired: (?boolean|undefined),
  *   shippingAddressRequirements: ?ShippingAddressRequirements,
  *   transactionInfo: ?TransactionInfo,
@@ -92,6 +95,7 @@ var IsReadyToPayRequest = {};
  * @property {boolean} phoneNumberRequired.
  * @property {boolean} emailRequired.
  * @property {boolean} shippingAddressRequired.
+ * @property {MerchantInfo} merchantInfo
  * @property {ShippingAddressRequirements} shippingAddressRequirements.
  * @property {TransactionInfo} transactionInfo
  * @property {SwgParameters} swg
@@ -170,6 +174,16 @@ var ShippingAddressRequirements;
  *
  */
 var TransactionInfo;
+
+/**
+ * @typedef {{
+ *   merchantId: (?string|undefined),
+ *   merchantOrigin: (?string|undefined),
+ *   merchantName: (?string|undefined),
+ *   authJwt: (?string|undefined),
+ * }}
+ */
+var MerchantInfo;
 
 
 /**
