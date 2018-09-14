@@ -64,13 +64,15 @@ class PaymentsAsyncClient {
     this.environment_ =
         paymentOptions.environment || Constants.Environment.TEST;
 
-    /** @const @private {string} */
-    this.googleTransactionId_ =
-        this.createGoogleTransactionId_(this.environment_);
+    if (!PaymentsAsyncClient.googleTransactionId_) {
+      PaymentsAsyncClient.googleTransactionId_ =
+          this.createGoogleTransactionId_(this.environment_);
+    }
 
     /** @private @const {?PaymentsClientDelegateInterface} */
     this.webActivityDelegate_ = new PaymentsWebActivityDelegate(
-        this.environment_, this.googleTransactionId_, opt_useIframe);
+        this.environment_, PaymentsAsyncClient.googleTransactionId_,
+        opt_useIframe);
 
     const paymentRequestSupported = chromeSupportsPaymentRequest();
     // TODO: Remove the temporary hack that disable payments
@@ -85,7 +87,8 @@ class PaymentsAsyncClient {
     this.webActivityDelegate_.onResult(this.onResult_.bind(this));
     this.delegate_.onResult(this.onResult_.bind(this));
 
-    PayFrameHelper.load(this.environment_, this.googleTransactionId_);
+    PayFrameHelper.load(
+        this.environment_, PaymentsAsyncClient.googleTransactionId_);
     // If web delegate is used anyway then this is overridden in the web
     // activity delegate when load payment data is called.
     if (chromeSupportsPaymentHandler()) {
@@ -415,7 +418,7 @@ class PaymentsAsyncClient {
   assignInternalParams_(paymentDataRequest) {
     const internalParam = {
       'startTimeMs': Date.now(),
-      'googleTransactionId': this.googleTransactionId_,
+      'googleTransactionId': PaymentsAsyncClient.googleTransactionId_,
     };
     paymentDataRequest['i'] = paymentDataRequest['i'] ?
         Object.assign(internalParam, paymentDataRequest['i']) :
@@ -423,5 +426,8 @@ class PaymentsAsyncClient {
     return paymentDataRequest;
   }
 }
+
+/** @const {?string} */
+PaymentsAsyncClient.googleTransactionId_;
 
 export {PaymentsAsyncClient};
