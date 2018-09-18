@@ -17,11 +17,12 @@
 
 import {Constants} from './constants.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
-import {ActivityPorts, ActivityIframePort} from '../third_party/web_activities/activity-ports.js';
+import {ActivityPort, ActivityPorts, ActivityIframePort} from '../third_party/web_activities/activity-ports.js';
 import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType} from './pay_frame_helper.js';
 import {doesMerchantSupportOnlyTokenizedCards} from './validator.js';
 import {injectStyleSheet, injectIframe} from './element_injector.js';
 
+const GPAY_ACTIVITY_REQUEST = 'GPAY';
 const IFRAME_CLOSE_DURATION_IN_MS = 250;
 const IFRAME_SHOW_UP_DURATION_IN_MS = 250;
 const ERROR_PREFIX = 'Error: ';
@@ -98,55 +99,66 @@ class PaymentsWebActivityDelegate {
       return;
     }
     this.callback_ = callback;
-    this.activities.onResult('request1', (port) => {
-      // Only verified origins are allowed.
-      callback(port.acceptResult().then(
-          (result) => {
-            const data = /** @type {!PaymentData} */ (result.data);
-            if (data['redirectEncryptedCallbackData']) {
-              PayFrameHelper.setBuyFlowActivityMode(
-                  BuyFlowActivityMode.REDIRECT);
-              return fetch(this.getDecryptionUrl_(), {
-                       method: 'post',
-                       credentials: 'include',
-                       mode: 'cors',
-                       body: data['redirectEncryptedCallbackData'],
-                     })
-                  .then((response) => {
-                    return response.json();
-                  });
-            }
-            return data;
-          },
-          (error) => {
-            // TODO: Log the original and the inferred error to eye3.
-            let originalError = error['message'];
-            let inferredError = error['message'];
-            try {
-              // Try to parse the error message to a structured error, if it's
-              // not possible, fallback to use the error message string.
-              inferredError =
-                  JSON.parse(originalError.substring(ERROR_PREFIX.length));
-            } catch (e) {
-            }
-            if (inferredError['statusCode'] && [
-                  'DEVELOPER_ERROR', 'MERCHANT_ACCOUNT_ERROR'
-                ].indexOf(inferredError['statusCode']) == -1) {
-              inferredError = {
-                'statusCode': 'CANCELED',
-              };
-            }
-            if (inferredError == 'AbortError') {
-              inferredError = {
-                'statusCode': 'CANCELED',
-              };
-            }
-            console.log(
-                'Google Pay request failed, error:\n' +
-                JSON.stringify(inferredError));
-            return Promise.reject(inferredError);
-          }));
-    });
+    this.activities.onResult(GPAY_ACTIVITY_REQUEST,
+                             this.onActivityResult_.bind(this));
+    // TODO: Remove once the GPAY_ACTIVITY_REQUEST is fully
+    // deployed.
+    this.activities.onResult('request1',
+                             this.onActivityResult_.bind(this));
+  }
+
+  /**
+   * @param {!ActivityPort} port
+   * @private
+   */
+  onActivityResult_(port) {
+    // Only verified origins are allowed.
+    this.callback_(port.acceptResult().then(
+        (result) => {
+          const data = /** @type {!PaymentData} */ (result.data);
+          if (data['redirectEncryptedCallbackData']) {
+            PayFrameHelper.setBuyFlowActivityMode(
+                BuyFlowActivityMode.REDIRECT);
+            return fetch(this.getDecryptionUrl_(), {
+                     method: 'post',
+                     credentials: 'include',
+                     mode: 'cors',
+                     body: data['redirectEncryptedCallbackData'],
+                   })
+                .then((response) => {
+                  return response.json();
+                });
+          }
+          return data;
+        },
+        (error) => {
+          // TODO: Log the original and the inferred error to eye3.
+          let originalError = error['message'];
+          let inferredError = error['message'];
+          try {
+            // Try to parse the error message to a structured error, if it's
+            // not possible, fallback to use the error message string.
+            inferredError =
+                JSON.parse(originalError.substring(ERROR_PREFIX.length));
+          } catch (e) {
+          }
+          if (inferredError['statusCode'] && [
+                'DEVELOPER_ERROR', 'MERCHANT_ACCOUNT_ERROR'
+              ].indexOf(inferredError['statusCode']) == -1) {
+            inferredError = {
+              'statusCode': 'CANCELED',
+            };
+          }
+          if (inferredError == 'AbortError') {
+            inferredError = {
+              'statusCode': 'CANCELED',
+            };
+          }
+          console.log(
+              'Google Pay request failed, error:\n' +
+              JSON.stringify(inferredError));
+          return Promise.reject(inferredError);
+        }));
   }
 
   /** @override */
@@ -255,7 +267,8 @@ class PaymentsWebActivityDelegate {
         paymentDataRequest['forceRedirect'] ? BuyFlowActivityMode.REDIRECT :
                                               BuyFlowActivityMode.POPUP);
     this.activities.open(
-        'request1', this.getHostingPageUrl_(),
+        GPAY_ACTIVITY_REQUEST,
+        this.getHostingPageUrl_(),
         this.getRenderMode_(paymentDataRequest), paymentDataRequest,
         {'width': 600, 'height': 600});
   }
