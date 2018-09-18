@@ -30,6 +30,7 @@
  * @property {string} environment The environment to use. Current available
  *     environments are PRODUCTION or TEST. If not set, defaults to
  *     environment PRODUCTION.
+ * @property {InternalParameters} i
  */
 var PaymentOptions;
 

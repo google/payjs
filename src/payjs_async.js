@@ -63,10 +63,13 @@ class PaymentsAsyncClient {
     /** @private @const {string} */
     this.environment_ =
         paymentOptions.environment || Constants.Environment.TEST;
-
     if (!PaymentsAsyncClient.googleTransactionId_) {
       PaymentsAsyncClient.googleTransactionId_ =
-          this.createGoogleTransactionId_(this.environment_);
+          /** @type {string} */ (
+              (this.isInTrustedDomain_() && paymentOptions['i'] &&
+               paymentOptions['i']['googleTransactionId']) ?
+                  paymentOptions['i']['googleTransactionId'] :
+                  this.createGoogleTransactionId_(this.environment_));
     }
 
     /** @private @const {?PaymentsClientDelegateInterface} */
