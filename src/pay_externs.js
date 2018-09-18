@@ -162,6 +162,7 @@ var ShippingAddressRequirements;
  *   currencyCode: (?string|undefined),
  *   totalPriceStatus: (?string|undefined),
  *   totalPrice: (?string|undefined),
+ *   checkoutOption: (?string|undefined),
  * }}
  *
  * @property {string} currencyCode The ISO 4217 currency code of the
@@ -171,6 +172,8 @@ var ShippingAddressRequirements;
  * @property {string} totalPrice The the total price of this transaction. The
  *     format of this string should follow the regex format:
  *         [0-9]+(\.[0-9][0-9])? (e.g., "10.45").
+ * @property {string} checkoutOption. The checkoutOptions can be
+ *     either 'DEFAULT' or 'COMPLETE_IMMEDIATE_PURCHASE'
  *
  */
 var TransactionInfo;
