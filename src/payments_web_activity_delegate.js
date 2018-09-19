@@ -93,6 +93,11 @@ class PaymentsWebActivityDelegate {
     // Only install dialog styles when iframing is allowed.
     if (this.useIframe_) {
       injectStyleSheet(Constants.IFRAME_STYLE);
+      if (null) {
+        injectStyleSheet(Constants.IFRAME_STYLE_CENTER);
+      } else {
+        injectStyleSheet(Constants.IFRAME_STYLE_BOTTOM);
+      }
     }
   }
 
@@ -214,7 +219,7 @@ class PaymentsWebActivityDelegate {
     if (!this.useIframe_) {
       return;
     }
-    const containerAndFrame = this.injectIframe_();
+    const containerAndFrame = this.injectIframe_(paymentDataRequest);
     const paymentDataPromise = this.openIframe_(
         containerAndFrame['container'], containerAndFrame['iframe'],
         paymentDataRequest);
@@ -246,13 +251,14 @@ class PaymentsWebActivityDelegate {
         paymentDataPromise = this.prefetchedObjects_['dataPromise'];
         this.prefetchedObjects_ = null;
       } else {
-        containerAndFrame = this.injectIframe_();
+        containerAndFrame = this.injectIframe_(paymentDataRequest);
         paymentDataPromise = this.openIframe_(
             containerAndFrame['container'], containerAndFrame['iframe'],
             paymentDataRequest);
       }
       this.showContainerAndIframeWithAnimation_(
-          containerAndFrame['container'], containerAndFrame['iframe']);
+          containerAndFrame['container'], containerAndFrame['iframe'],
+          paymentDataRequest);
       history.pushState({}, '', '');
       const onPopState = (e) => {
         e.preventDefault();
@@ -373,11 +379,14 @@ class PaymentsWebActivityDelegate {
   }
 
   /**
+   * @param {!PaymentDataRequest} paymentDataRequest
    * @return {{container: !Element, iframe:!HTMLIFrameElement}}
    * @private
    */
-  injectIframe_() {
-    const containerAndFrame = injectIframe();
+  injectIframe_(paymentDataRequest) {
+    const containerAndFrame =
+        injectIframe(this.isVerticalCenterExperimentEnabled_(paymentDataRequest)
+            ? 'dialogCenter' : 'dialog');
     const iframe = containerAndFrame['iframe'];
     const container = containerAndFrame['container'];
     container.addEventListener(
@@ -433,17 +442,32 @@ class PaymentsWebActivityDelegate {
   }
 
   /**
-   * @param {!Element} container
-   * @param {!HTMLIFrameElement} iframe
+   * @param {!PaymentDataRequest} paymentDataRequest
+   * @return {boolean}
    * @private
    */
-  showContainerAndIframeWithAnimation_(container, iframe) {
+  isVerticalCenterExperimentEnabled_(paymentDataRequest) {
+    return null
+        && paymentDataRequest['i']
+        && paymentDataRequest['i'].renderContainerCenter;
+  }
+
+  /**
+   * @param {!Element} container
+   * @param {!HTMLIFrameElement} iframe
+   * @param {!PaymentDataRequest} paymentDataRequest
+   * @private
+   */
+  showContainerAndIframeWithAnimation_(container, iframe, paymentDataRequest) {
     container.style.display = 'block';
     iframe.style.display = 'block';
     setTimeout(() => {
       // Hard code the apprx height here, it will be resize to expected height
       // later.
       iframe.height = '260px';
+      if (this.isVerticalCenterExperimentEnabled_(paymentDataRequest)) {
+        iframe.classList.add('activeContainer');
+      }
       // TODO: This should be handles properly by listening to
       // TransitionEnd event.
       setTimeout(() => {

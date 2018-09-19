@@ -213,17 +213,22 @@ var SwgParameters;
  *   startTimeMs: (number|undefined),
  *   preferredAccountId: (string|undefined),
  *   userIndex: (string|undefined),
+ *   renderContainerCenter: (boolean|undefined),
  * }}
  *
- * @property {(string|undefined)} ampMerchantOrigin The origin of an amp page. This field
- *     should only be trusted if loaded in Google Viewer.
- * @property {(string|undefined)} googleTransactionId The google transaction id to keep
- *     track of the current transaction.
- * @property {(number|undefined)} startTimeMs The unix time for when an API method
- *     was called.
- * @property {(string|undefined)} preferredAccountId The obfuscated id of the user.
- * @property {(string|undefined)} userIndex The current user's Gaia session cookie
- *     index, a string (e.g. "0" or "5").
+ * @property {(string|undefined)} ampMerchantOrigin The origin of an amp page.
+ *     This field should only be trusted if loaded in Google Viewer.
+ * @property {(string|undefined)} googleTransactionId The google transaction id
+ *     to keep track of the current transaction.
+ * @property {(number|undefined)} startTimeMs The unix time for when an API
+ *     method was called.
+ * @property {(string|undefined)} preferredAccountId The obfuscated id of the
+ *     user.
+ * @property {(string|undefined)} userIndex The current user's Gaia session
+ *     cookie index, a string (e.g. "0" or "5").
+ * @property {(boolean|undefined)} renderContainerCenter The flag to decide
+ *     whether he PayJS container should be vertically centered or loaded from
+ *     the bottom.
  */
 var InternalParameters;
 

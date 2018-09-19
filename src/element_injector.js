@@ -30,9 +30,10 @@ function injectStyleSheet(styleText) {
 
 /**
  * Injects the pay with google iframe.
+ * @param {string} iframeClassName The classname of the iFrame wrapper.
  * @return {!{container: !Element, iframe:!HTMLIFrameElement}}
  */
-function injectIframe() {
+function injectIframe(iframeClassName) {
   const container = document.createElement('div');
   container.classList.add('dialogContainer');
   const iframeContainer = document.createElement('div');
@@ -40,7 +41,7 @@ function injectIframe() {
   /** @private @const {!HTMLIFrameElement} */
   const iframe =
       /** @type {!HTMLIFrameElement} */ (document.createElement('iframe'));
-  iframe.classList.add('dialog');
+  iframe.classList.add(iframeClassName);
   iframe.setAttribute('frameborder', '0');
   iframe.setAttribute('scrolling', 'no');
   iframeContainer.appendChild(iframe);

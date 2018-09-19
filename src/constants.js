@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+const MAX_Z_INDEX = 2147483647;
+
 const Constants = {};
 
 /**
@@ -119,30 +121,22 @@ Constants.IFRAME_STYLE_CLASS = 'dialog';
 Constants.IFRAME_STYLE = `
 .dialog {
     animation: none 0s ease 0s 1 normal none running;
-    background: none 0% 0% / auto repeat scroll padding-box border-box rgb(255, 255, 255);
+    background: none 0 0 / auto repeat scroll padding-box border-box #fff;
     background-blend-mode: normal;
-    border: 0px none rgb(51, 51, 51);
-    border-radius: 8px 8px 0px 0px;
+    border: 0 none #333;
+    border-radius: 8px 8px 0 0;
     border-collapse: separate;
-    bottom: 0px;
-    box-shadow: rgb(128, 128, 128) 0px 3px 0px 0px, rgb(128, 128, 128) 0px 0px 22px 0px;
+    bottom: 0;
+    box-shadow: #808080 0 3px 0 0, #808080 0 0 22px;
     box-sizing: border-box;
-    left: -240px;
     letter-spacing: normal;
     max-height: 100%;
     overflow: visible;
     position: fixed;
     width: 100%;
-    z-index: 2147483647;
+    z-index: ${MAX_Z_INDEX};
     -webkit-appearance: none;
-    left: 0px;
-}
-@media (min-width: 480px) {
-  .dialog{
-    width: 480px !important;
-    left: -240px !important;
-    margin-left: calc(100vw - 100vw / 2) !important;
-  }
+    left: 0;
 }
 .dialogContainer {
   background-color: rgba(0,0,0,0.26);
@@ -154,6 +148,45 @@ Constants.IFRAME_STYLE = `
 }
 .iframeContainer {
   -webkit-overflow-scrolling: touch;
+}
+`;
+
+Constants.IFRAME_STYLE_BOTTOM = `
+@media (min-width: 480px) {
+  .dialog{
+    width: 480px !important;
+    left: -240px !important;
+    margin-left: calc(100vw - 100vw / 2) !important;
+  }
+}
+`;
+
+Constants.IFRAME_STYLE_CENTER = `
+.dialogCenter {
+  animation: none 0s ease 0s 1 normal none running;
+  background-blend-mode: normal;
+  background: none 0 0 / auto repeat scroll padding-box border-box #fff;
+  border-collapse: separate;
+  border-radius: 8px;
+  border: 0px none #333;
+  bottom: auto;
+  box-shadow: #808080 0 0 22px;
+  box-sizing: border-box;
+  left: -240px;
+  letter-spacing: normal;
+  margin-left: calc(100vw - 100vw / 2) !important;
+  max-height: 600px;
+  overflow: visible;
+  position: absolute;
+  top: 100%;
+  transform: scale(0.8);
+  width: 480px;
+  z-index: ${MAX_Z_INDEX};
+  -webkit-appearance: none;
+}
+.activeContainer {
+  top: 50%;
+  transform: scale(1.0) translateY(-50%);
 }
 `;
 
@@ -200,7 +233,6 @@ Constants.BUTTON_STYLE = `
   cursor: pointer;
   height: 40px;
   min-height: 40px;
-  outline: 0px;
   padding: 11px 24px;
 }
 
