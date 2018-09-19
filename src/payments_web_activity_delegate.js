@@ -90,7 +90,10 @@ class PaymentsWebActivityDelegate {
      */
     this.savedResizePayload_ = null;
 
-    injectStyleSheet(Constants.IFRAME_STYLE);
+    // Only install dialog styles when iframing is allowed.
+    if (this.useIframe_) {
+      injectStyleSheet(Constants.IFRAME_STYLE);
+    }
   }
 
   /** @override */
