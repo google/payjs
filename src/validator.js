@@ -53,6 +53,11 @@ function chromeSupportsPaymentRequest() {
   if (chromeSupportsPaymentHandler()) {
     return true;
   }
+
+  if (typeof google != 'undefined' &&
+      null) {
+    return false;
+  }
   const androidPlatform = window.navigator.userAgent.match(/Android/i);
   const chromeVersion = window.navigator.userAgent.match(/Chrome\/([0-9]+)\./i);
   return androidPlatform != null && 'PaymentRequest' in window &&
