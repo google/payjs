@@ -25,6 +25,8 @@ import {injectStyleSheet, injectIframe} from './element_injector.js';
 const GPAY_ACTIVITY_REQUEST = 'GPAY';
 const IFRAME_CLOSE_DURATION_IN_MS = 250;
 const IFRAME_SHOW_UP_DURATION_IN_MS = 250;
+const IFRAME_SMOOTH_HEIGHT_TRANSITION =
+    `height ${IFRAME_SHOW_UP_DURATION_IN_MS}ms`;
 const ERROR_PREFIX = 'Error: ';
 
 /**
@@ -464,7 +466,7 @@ class PaymentsWebActivityDelegate {
     setTimeout(() => {
       // Hard code the apprx height here, it will be resize to expected height
       // later.
-      iframe.height = '260px';
+      iframe.height = '280px';
       if (this.isVerticalCenterExperimentEnabled_(paymentDataRequest)) {
         iframe.classList.add('activeContainer');
       }
@@ -509,6 +511,7 @@ class PaymentsWebActivityDelegate {
       }
     }
     paymentDataRequest.environment = this.environment_;
+    let iframeLoadStartTime;
     const trustedUrl =
         this.getIframeUrl(this.environment_, window.location.origin);
     return this.activities.openIframe(iframe, trustedUrl, paymentDataRequest)
@@ -524,7 +527,17 @@ class PaymentsWebActivityDelegate {
               };
               return;
             }
-            this.setTransition_(iframe, payload['transition']);
+            // b/111310899: Smooth out initial iFrame loading
+            if (!iframeLoadStartTime) {
+              iframeLoadStartTime = Date.now();
+            }
+            if (Date.now() <
+                iframeLoadStartTime + IFRAME_SHOW_UP_DURATION_IN_MS) {
+              this.setTransition_(iframe, payload['transition'] + ', '
+                  + IFRAME_SMOOTH_HEIGHT_TRANSITION);
+            } else {
+              this.setTransition_(iframe, payload['transition']);
+            }
             iframe.height = payload['height'];
           });
           return /** @type {!Promise<!Object>} */ (port.acceptResult());
