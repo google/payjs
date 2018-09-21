@@ -25,11 +25,14 @@
  *
  * @typedef {{
  *   environment: (?string|undefined),
+ *   merchantInfo: (?MerchantInfo|undefined),
+ *   i: (?InternalParameters|undefined),
  * }}
  *
  * @property {string} environment The environment to use. Current available
  *     environments are PRODUCTION or TEST. If not set, defaults to
  *     environment PRODUCTION.
+ * @property {MerchantInfo} merchantInfo
  * @property {InternalParameters} i
  */
 var PaymentOptions;

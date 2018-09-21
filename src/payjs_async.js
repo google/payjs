@@ -48,7 +48,7 @@ const TRUSTED_DOMAINS = [
  */
 class PaymentsAsyncClient {
   /**
-   * @param {PaymentOptions} paymentOptions
+   * @param {!PaymentOptions} paymentOptions
    * @param {function(!Promise<!PaymentData>)} onPaymentResponse
    * @param {boolean=} opt_useIframe
    */
@@ -71,6 +71,9 @@ class PaymentsAsyncClient {
                   paymentOptions['i']['googleTransactionId'] :
                   this.createGoogleTransactionId_(this.environment_));
     }
+
+    /** @private @const {!PaymentOptions} */
+    this.paymentOptions_ = paymentOptions;
 
     /** @private @const {?PaymentsClientDelegateInterface} */
     this.webActivityDelegate_ = new PaymentsWebActivityDelegate(
@@ -114,6 +117,11 @@ class PaymentsAsyncClient {
    * @export
    */
   isReadyToPay(isReadyToPayRequest) {
+    // Merge with gPayInitParams, preferring values from isReadyToPayRequest
+    if (isReadyToPayRequest) {
+      isReadyToPayRequest =
+          Object.assign({}, this.paymentOptions_, isReadyToPayRequest);
+    }
     const startTimeMs = Date.now();
     /** @type {?string} */
     const errorMessage = validateSecureContext() ||
