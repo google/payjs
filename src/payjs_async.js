@@ -75,7 +75,7 @@ class PaymentsAsyncClient {
     /** @private @const {!PaymentOptions} */
     this.paymentOptions_ = paymentOptions;
 
-    /** @private @const {?PaymentsClientDelegateInterface} */
+    /** @private @const {!PaymentsClientDelegateInterface} */
     this.webActivityDelegate_ = new PaymentsWebActivityDelegate(
         this.environment_, PaymentsAsyncClient.googleTransactionId_,
         opt_useIframe);

@@ -17,6 +17,7 @@
 
 import {Constants} from './constants.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
+import {RedirectVerifierHelper} from './redirect_verifier_helper.js';
 import {ActivityPort, ActivityPorts, ActivityIframePort} from '../third_party/web_activities/activity-ports.js';
 import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType} from './pay_frame_helper.js';
 import {doesMerchantSupportOnlyTokenizedCards} from './validator.js';
@@ -68,6 +69,10 @@ class PaymentsWebActivityDelegate {
     /** @private @const {boolean} */
     this.useIframe_ = opt_useIframe || false;
     this.activities = new ActivityPorts(window);
+    // TODO: Make non-null and const once the
+    // "enable_redirect_verifier" experiment is launched.
+    /** @private {?RedirectVerifierHelper} */
+    this.redirectVerifierHelper_ = null;
     /** @private {?function(!Promise<!PaymentData>)} */
     this.callback_ = null;
     /**
@@ -100,6 +105,12 @@ class PaymentsWebActivityDelegate {
       } else {
         injectStyleSheet(Constants.IFRAME_STYLE_BOTTOM);
       }
+    }
+
+    if (null) {
+      // Prepare the redirect verifier to avoid popup blockers.
+      this.redirectVerifierHelper_ = new RedirectVerifierHelper(window);
+      this.redirectVerifierHelper_.prepare();
     }
   }
 
@@ -277,11 +288,29 @@ class PaymentsWebActivityDelegate {
     PayFrameHelper.setBuyFlowActivityMode(
         paymentDataRequest['forceRedirect'] ? BuyFlowActivityMode.REDIRECT :
                                               BuyFlowActivityMode.POPUP);
-    this.activities.open(
-        GPAY_ACTIVITY_REQUEST,
-        this.getHostingPageUrl_(),
-        this.getRenderMode_(paymentDataRequest), paymentDataRequest,
-        {'width': 600, 'height': 600});
+    if (null) {
+      // Notice that the callback for verifier may execute asynchronously.
+      this.redirectVerifierHelper_.useVerifier(verifier => {
+        if (verifier) {
+          paymentDataRequest['i'] = Object.assign(
+              paymentDataRequest['i'] || {},
+              {'redirectVerifier': verifier});
+        }
+        this.activities.open(
+            GPAY_ACTIVITY_REQUEST,
+            this.getHostingPageUrl_(),
+            this.getRenderMode_(paymentDataRequest),
+            paymentDataRequest,
+            {'width': 600, 'height': 600});
+      });
+    } else {
+      this.activities.open(
+          GPAY_ACTIVITY_REQUEST,
+          this.getHostingPageUrl_(),
+          this.getRenderMode_(paymentDataRequest),
+          paymentDataRequest,
+          {'width': 600, 'height': 600});
+    }
   }
 
   /**
@@ -322,7 +351,14 @@ class PaymentsWebActivityDelegate {
    * @return {string} The decryption url
    */
   getDecryptionUrl_() {
-    return this.getBasePath_() + '/apis/buyflow/process';
+    let url = this.getBasePath_() + '/apis/buyflow/process';
+    if (null) {
+      const redirectKey = this.redirectVerifierHelper_.restoreKey();
+      if (redirectKey) {
+        url += '?rk=' + encodeURIComponent(redirectKey);
+      }
+    }
+    return url;
   }
 
   /**
