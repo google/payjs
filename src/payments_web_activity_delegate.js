@@ -422,9 +422,10 @@ class PaymentsWebActivityDelegate {
    * @private
    */
   injectIframe_(paymentDataRequest) {
-    const containerAndFrame =
-        injectIframe(this.isVerticalCenterExperimentEnabled_(paymentDataRequest)
-            ? 'dialogCenter' : 'dialog');
+    const containerAndFrame = injectIframe(
+        this.isVerticalCenterExperimentEnabled_(paymentDataRequest) ?
+            Constants.IFRAME_STYLE_CENTER_CLASS :
+            Constants.IFRAME_STYLE_CLASS);
     const iframe = containerAndFrame['iframe'];
     const container = containerAndFrame['container'];
     container.addEventListener(
@@ -504,7 +505,7 @@ class PaymentsWebActivityDelegate {
       // later.
       iframe.height = '280px';
       if (this.isVerticalCenterExperimentEnabled_(paymentDataRequest)) {
-        iframe.classList.add('activeContainer');
+        iframe.classList.add(Constants.IFRAME_ACTIVE_CONTAINER_CLASS);
       }
       // TODO: This should be handles properly by listening to
       // TransitionEnd event.

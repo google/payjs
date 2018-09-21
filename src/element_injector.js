@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+import {Constants} from './constants.js';
+
 /**
  * Injects the provided style sheet to the document head.
  * @param {string} styleText The stylesheet to be injected.
@@ -35,7 +37,7 @@ function injectStyleSheet(styleText) {
  */
 function injectIframe(iframeClassName) {
   const container = document.createElement('div');
-  container.classList.add('dialogContainer');
+  container.classList.add(Constants.IFRAME_CONTAINER_CLASS);
   const iframeContainer = document.createElement('div');
   iframeContainer.classList.add('iframeContainer');
   /** @private @const {!HTMLIFrameElement} */

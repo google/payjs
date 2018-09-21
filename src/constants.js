@@ -120,10 +120,15 @@ Constants.REDIRECT_STORAGE_KEY =
     Constants.STORAGE_KEY_PREFIX + '.redirect.key';
 
 
-Constants.IFRAME_STYLE_CLASS = 'dialog';
+Constants.CLASS_PREFIX = 'google-payments-';
+Constants.IFRAME_ACTIVE_CONTAINER_CLASS =
+    `${Constants.CLASS_PREFIX}activeContainer`;
+Constants.IFRAME_CONTAINER_CLASS = `${Constants.CLASS_PREFIX}dialogContainer`;
+Constants.IFRAME_STYLE_CENTER_CLASS = `${Constants.CLASS_PREFIX}dialogCenter`;
+Constants.IFRAME_STYLE_CLASS = `${Constants.CLASS_PREFIX}dialog`;
 
 Constants.IFRAME_STYLE = `
-.dialog {
+.${Constants.IFRAME_STYLE_CLASS} {
     animation: none 0s ease 0s 1 normal none running;
     background: none 0 0 / auto repeat scroll padding-box border-box #fff;
     background-blend-mode: normal;
@@ -142,7 +147,7 @@ Constants.IFRAME_STYLE = `
     -webkit-appearance: none;
     left: 0;
 }
-.dialogContainer {
+.${Constants.IFRAME_CONTAINER_CLASS} {
   background-color: rgba(0,0,0,0.26);
   bottom: 0;
   height: 100%;
@@ -157,7 +162,7 @@ Constants.IFRAME_STYLE = `
 
 Constants.IFRAME_STYLE_BOTTOM = `
 @media (min-width: 480px) {
-  .dialog{
+  .${Constants.IFRAME_STYLE_CLASS}{
     width: 480px !important;
     left: -240px !important;
     margin-left: calc(100vw - 100vw / 2) !important;
@@ -166,7 +171,7 @@ Constants.IFRAME_STYLE_BOTTOM = `
 `;
 
 Constants.IFRAME_STYLE_CENTER = `
-.dialogCenter {
+.${Constants.IFRAME_STYLE_CENTER_CLASS} {
   animation: none 0s ease 0s 1 normal none running;
   background-blend-mode: normal;
   background: none 0 0 / auto repeat scroll padding-box border-box #fff;
@@ -188,7 +193,7 @@ Constants.IFRAME_STYLE_CENTER = `
   z-index: ${MAX_Z_INDEX};
   -webkit-appearance: none;
 }
-.activeContainer {
+.${Constants.IFRAME_ACTIVE_CONTAINER_CLASS} {
   top: 50%;
   transform: scale(1.0) translateY(-50%);
 }
