@@ -277,9 +277,12 @@ class PayFrameHelper {
    */
   static getIframeUrl_(origin, initializeTimeMs, googleTransactionId) {
     // TrustedResourceUrl header needs to start with https or '//'.
-    const iframeUrl = `https://pay${environment == Constants.Environment.PREPROD ?
+    const iframeUrl = 'https://pay' +
+        (environment == Constants.Environment.PREPROD ?
              '-preprod.sandbox' :
-             environment == Constants.Environment.SANDBOX ? '.sandbox' : ''}.google.com/gp/p/ui/payframe?origin=${origin}&t=${initializeTimeMs}&gTxnId=${googleTransactionId}`;
+             environment == Constants.Environment.SANDBOX ? '.sandbox' : '') +
+        '.google.com/gp/p/ui/payframe?origin=' +
+        '%{windowOrigin}&t=%{initializeTimeMs}&gTxnId=%{googleTransactionId}';
     return iframeUrl;
   }
 }
