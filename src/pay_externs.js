@@ -78,15 +78,15 @@ var IsReadyToPayRequest = {};
  *   merchantId: (?string|undefined),
  *   allowedPaymentMethods: (?Array<string>|undefined),
  *   apiVersion: (?number|undefined),
- *   paymentMethodTokenizationParameters: ?PaymentMethodTokenizationParameters,
- *   cardRequirements: ?CardRequirements,
+ *   paymentMethodTokenizationParameters: (?PaymentMethodTokenizationParameters|undefined),
+ *   cardRequirements: (?CardRequirements|undefined),
  *   phoneNumberRequired: (?boolean|undefined),
  *   emailRequired: (?boolean|undefined),
  *   merchantInfo: (?MerchantInfo|undefined),
  *   shippingAddressRequired: (?boolean|undefined),
- *   shippingAddressRequirements: ?ShippingAddressRequirements,
- *   transactionInfo: ?TransactionInfo,
- *   swg: ?SwgParameters,
+ *   shippingAddressRequirements: (?ShippingAddressRequirements|undefined),
+ *   transactionInfo: (?TransactionInfo|undefined),
+ *   swg: (?SwgParameters|undefined),
  * }}
  *
  * @property {string} merchantId The obfuscated merchant gaia id.
