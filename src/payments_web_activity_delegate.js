@@ -154,19 +154,30 @@ class PaymentsWebActivityDelegate {
     // Only verified origins are allowed.
     this.callback_(port.acceptResult().then(
         (result) => {
+          if (null) {
+            // Origin must always match: popup, iframe or redirect.
+            if (result.origin != this.getOrigin_()) {
+              throw new Error('channel mismatch');
+            }
+          }
           const data = /** @type {!PaymentData} */ (result.data);
           if (data['redirectEncryptedCallbackData']) {
             PayFrameHelper.setBuyFlowActivityMode(
                 BuyFlowActivityMode.REDIRECT);
-            return fetch(this.getDecryptionUrl_(), {
-                     method: 'post',
-                     credentials: 'include',
-                     mode: 'cors',
-                     body: data['redirectEncryptedCallbackData'],
-                   })
-                .then((response) => {
-                  return response.json();
+            return this.fetchRedirectResponse_(
+                data['redirectEncryptedCallbackData'])
+                .then((decrypedJson) => {
+                  // Merge other non-encrypted fields into the final response.
+                  const clone = Object.assign({}, data);
+                  delete clone['redirectEncryptedCallbackData'];
+                  return Object.assign(clone, decrypedJson);
                 });
+          }
+          if (null) {
+            // Unencrypted data supplied: must be a verified and secure channel.
+            if (!result.originVerified || !result.secureChannel) {
+              throw new Error('channel mismatch');
+            }
           }
           return data;
         },
@@ -198,6 +209,54 @@ class PaymentsWebActivityDelegate {
               JSON.stringify(inferredError));
           return Promise.reject(inferredError);
         }));
+  }
+
+  /**
+   * @param {string} redirectEncryptedCallbackData
+   * @return {!PaymentData}
+   * @private
+   */
+  fetchRedirectResponse_(redirectEncryptedCallbackData) {
+    // This method has to rely on the legacy XHR API because the redirect
+    // functionality is, in part, aimed at older browsers.
+    return new Promise((resolve, reject) => {
+      const url = this.getDecryptionUrl_();
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      if ('withCredentials' in xhr) {
+        // It's fine to proceed in a non-redirect mode because redirectVerifier
+        // plays the part of CORS propagation.
+        xhr.withCredentials = true;
+      }
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState < /* STATUS_RECEIVED */ 2) {
+          return;
+        }
+        if (xhr.status < 100 || xhr.status > 599) {
+          xhr.onreadystatechange = null;
+          reject(new Error(`Unknown HTTP status ${xhr.status}`));
+          return;
+        }
+        if (xhr.readyState == /* COMPLETE */ 4) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch (e) {
+            // JSON parsing error is expected here.
+            reject(e);
+          }
+        }
+      };
+      xhr.onerror = () => {
+        reject(new Error('Network failure'));
+      };
+      xhr.onabort = () => {
+        reject(new Error('Request aborted'));
+      };
+
+      // Send POST.
+      xhr.send(redirectEncryptedCallbackData);
+    });
   }
 
   /** @override */
@@ -351,12 +410,12 @@ class PaymentsWebActivityDelegate {
   }
 
   /**
-   * Returns the base path based on the environment.
+   * Returns the server origin based on the environment.
    *
    * @private
-   * @return {string} The base path
+   * @return {string}
    */
-  getBasePath_() {
+  getOrigin_() {
     var baseDomain;
     if (this.environment_ == Constants.Environment.PREPROD) {
       baseDomain = 'pay-preprod.sandbox';
@@ -365,7 +424,17 @@ class PaymentsWebActivityDelegate {
     } else {
       baseDomain = 'pay';
     }
-    return 'https://' + baseDomain + '.google.com/gp/p';
+    return 'https://' + baseDomain + '.google.com';
+  }
+
+  /**
+   * Returns the base path based on the environment.
+   *
+   * @private
+   * @return {string} The base path
+   */
+  getBasePath_() {
+    return this.getOrigin_() + '/gp/p';
   }
 
   /**
