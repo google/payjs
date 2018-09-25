@@ -16,6 +16,7 @@
  */
 
 import {Constants} from './constants.js';
+import {Graypane} from './graypane.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
 import {RedirectVerifierHelper} from './redirect_verifier_helper.js';
 import {ActivityPort, ActivityPorts, ActivityIframePort} from '../third_party/web_activities/activity-ports.js';
@@ -77,6 +78,10 @@ class PaymentsWebActivityDelegate {
     // "enable_redirect_verifier" experiment is launched.
     /** @private {?RedirectVerifierHelper} */
     this.redirectVerifierHelper_ = null;
+    // TODO: Make non-null and const once the "enable_graypane"
+    // experiment is launched.
+    /** @private {?Graypane} */
+    this.graypane_ = null;
     /** @private {?function(!Promise<!PaymentData>)} */
     this.callback_ = null;
     /**
@@ -116,6 +121,11 @@ class PaymentsWebActivityDelegate {
       this.redirectVerifierHelper_ = new RedirectVerifierHelper(window);
       this.redirectVerifierHelper_.prepare();
     }
+
+    if (null) {
+      // Prepare the graypane.
+      this.graypane_ = new Graypane(window.document);
+    }
   }
 
   /** @override */
@@ -137,6 +147,10 @@ class PaymentsWebActivityDelegate {
    * @private
    */
   onActivityResult_(port) {
+    // Hide the graypane.
+    if (null) {
+      this.graypane_.hide();
+    }
     // Only verified origins are allowed.
     this.callback_(port.acceptResult().then(
         (result) => {
@@ -300,20 +314,26 @@ class PaymentsWebActivityDelegate {
               paymentDataRequest['i'] || {},
               {'redirectVerifier': verifier});
         }
-        this.activities.open(
+        const opener = this.activities.open(
             GPAY_ACTIVITY_REQUEST,
             this.getHostingPageUrl_(),
             this.getRenderMode_(paymentDataRequest),
             paymentDataRequest,
             {'width': 600, 'height': 600});
+        if (null) {
+          this.graypane_.show(opener && opener.targetWin);
+        }
       });
     } else {
-      this.activities.open(
+      const opener = this.activities.open(
           GPAY_ACTIVITY_REQUEST,
           this.getHostingPageUrl_(),
           this.getRenderMode_(paymentDataRequest),
           paymentDataRequest,
           {'width': 600, 'height': 600});
+      if (null) {
+        this.graypane_.show(opener && opener.targetWin);
+      }
     }
   }
 

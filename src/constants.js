@@ -224,6 +224,13 @@ Constants.BUTTON_LOCALE_TO_MIN_WIDTH = {
 };
 
 /**
+ * Name of the graypane.
+ *
+ * @const {string}
+ */
+Constants.GPAY_GRAYPANE = 'gpay-graypane';
+
+/**
  * Class used for the gpay button.
  *
  * @const {string}

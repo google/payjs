@@ -31,6 +31,7 @@ closure_js_library(
         "button.js",
         "constants.js",
         "element_injector.js",
+        "graypane.js",
         "pay_externs.js",
         "pay_frame_helper.js",
         "payjs.js",
