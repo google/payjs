@@ -21,6 +21,7 @@ import {PaymentsRequestDelegate} from './payments_request_delegate.js';
 import {PaymentsWebActivityDelegate} from './payments_web_activity_delegate.js';
 import {UpiHandler} from './upi_handler.js';
 import uuid from '../third_party/random_uuid/Random.uuid.js';
+import {ActivityPorts} from '../third_party/web_activities/activity-ports.js';
 import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType, PublicErrorCode} from './pay_frame_helper.js';
 import {apiV2DoesMerchantSupportSpecifiedCardType, chromeSupportsPaymentHandler, chromeSupportsPaymentRequest, doesMerchantSupportOnlyTokenizedCards, getUpiPaymentMethod, validatePaymentOptions, validateIsReadyToPayRequest, validatePaymentDataRequest, validateSecureContext} from './validator.js';
 import {createButtonHelper} from './button.js';
@@ -51,8 +52,11 @@ class PaymentsAsyncClient {
    * @param {!PaymentOptions} paymentOptions
    * @param {function(!Promise<!PaymentData>)} onPaymentResponse
    * @param {boolean=} opt_useIframe
+   * @param {!ActivityPorts=} opt_activities Can be used to provide a shared
+   *   activities manager. By default, the new manager is created.
    */
-  constructor(paymentOptions, onPaymentResponse, opt_useIframe) {
+  constructor(paymentOptions, onPaymentResponse, opt_useIframe,
+             opt_activities) {
     this.onPaymentResponse_ = onPaymentResponse;
 
     validatePaymentOptions(paymentOptions);
@@ -77,8 +81,10 @@ class PaymentsAsyncClient {
 
     /** @private @const {!PaymentsClientDelegateInterface} */
     this.webActivityDelegate_ = new PaymentsWebActivityDelegate(
-        this.environment_, PaymentsAsyncClient.googleTransactionId_,
-        opt_useIframe);
+        this.environment_,
+        PaymentsAsyncClient.googleTransactionId_,
+        opt_useIframe,
+        opt_activities);
 
     const paymentRequestSupported = chromeSupportsPaymentRequest();
     // TODO: Remove the temporary hack that disable payments
@@ -166,7 +172,8 @@ class PaymentsAsyncClient {
     if (this.upiHandler_.isUpiRequest(isReadyToPayRequest)) {
       return this.upiHandler_.isReadyToPay(isReadyToPayRequest);
     }
-    if (chromeSupportsPaymentRequest()) {
+    if (chromeSupportsPaymentRequest() &&
+       !isNativeDisabledInRequest(isReadyToPayRequest)) {
       if (isReadyToPayRequest.apiVersion >= 2) {
         return this.isReadyToPayApiV2ForChromePaymentRequest_(
             isReadyToPayRequest);
@@ -269,7 +276,8 @@ class PaymentsAsyncClient {
       return;
     }
     this.assignInternalParams_(paymentDataRequest);
-    if (chromeSupportsPaymentRequest()) {
+    if (chromeSupportsPaymentRequest()
+       && !isNativeDisabledInRequest(paymentDataRequest)) {
       this.delegate_.prefetchPaymentData(paymentDataRequest);
     } else {
       // For non chrome supports always use the hosting page.
@@ -324,7 +332,8 @@ class PaymentsAsyncClient {
     // We want to fall back to the web delegate if payment handler is supported
     // and isReadyToPay bit is not explicitly set to true (fallback to web if
     // isReadyToPay wasn't called for PH)
-    if (chromeSupportsPaymentHandler() && isReadyToPayResult !== 'true') {
+    if ((chromeSupportsPaymentHandler() && isReadyToPayResult !== 'true')
+       || isNativeDisabledInRequest(paymentDataRequest)) {
       this.webActivityDelegate_.loadPaymentData(paymentDataRequest);
     } else {
       this.delegate_.loadPaymentData(paymentDataRequest);
@@ -440,5 +449,17 @@ class PaymentsAsyncClient {
 
 /** @const {?string} */
 PaymentsAsyncClient.googleTransactionId_;
+
+
+/**
+ * Whether the request specifies that the native support has to be disabled.
+ *
+ * @param {!IsReadyToPayRequest|!PaymentDataRequest} request
+ * @return {boolean}
+ */
+function isNativeDisabledInRequest(request) {
+  return (request['i'] && request['i']['disableNative']) === true;
+}
+
 
 export {PaymentsAsyncClient};

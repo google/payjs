@@ -63,12 +63,16 @@ class PaymentsWebActivityDelegate {
    * @param {string} environment
    * @param {string} googleTransactionId
    * @param {boolean=} opt_useIframe
+   * @param {!ActivityPorts=} opt_activities Can be used to provide a shared
+   *   activities manager. By default, the new manager is created.
    */
-  constructor(environment, googleTransactionId, opt_useIframe) {
+  constructor(environment, googleTransactionId, opt_useIframe,
+             opt_activities) {
     this.environment_ = environment;
     /** @private @const {boolean} */
     this.useIframe_ = opt_useIframe || false;
-    this.activities = new ActivityPorts(window);
+    /** @const {!ActivityPorts} */
+    this.activities = opt_activities || new ActivityPorts(window);
     // TODO: Make non-null and const once the
     // "enable_redirect_verifier" experiment is launched.
     /** @private {?RedirectVerifierHelper} */
