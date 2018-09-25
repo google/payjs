@@ -41,6 +41,7 @@ closure_js_library(
         "post_message_service.js",
         "redirect_verifier_helper.js",
         "upi_handler.js",
+        "utils.js",
         "validator.js",
     ],
     suppress = [
@@ -73,4 +74,12 @@ closure_js_library(
         "validator.js",
     ],
     suppress = ["JSC_UNKNOWN_EXPR_TYPE"],
+)
+
+closure_js_library(
+    name = "utils",
+    srcs = [
+        "utils.js",
+    ],
+    deps = ["//third_party/javascript/random_uuid:uuid"],
 )

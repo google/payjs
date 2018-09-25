@@ -20,11 +20,11 @@ import {PaymentsClientDelegateInterface} from './payments_client_delegate_interf
 import {PaymentsRequestDelegate} from './payments_request_delegate.js';
 import {PaymentsWebActivityDelegate} from './payments_web_activity_delegate.js';
 import {UpiHandler} from './upi_handler.js';
-import uuid from '../third_party/random_uuid/Random.uuid.js';
 import {ActivityPorts} from '../third_party/web_activities/activity-ports.js';
 import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType, PublicErrorCode} from './pay_frame_helper.js';
 import {apiV2DoesMerchantSupportSpecifiedCardType, chromeSupportsPaymentHandler, chromeSupportsPaymentRequest, doesMerchantSupportOnlyTokenizedCards, getUpiPaymentMethod, validatePaymentOptions, validateIsReadyToPayRequest, validatePaymentDataRequest, validateSecureContext} from './validator.js';
 import {createButtonHelper} from './button.js';
+import {createGoogleTransactionId} from './utils.js';
 
 const TRUSTED_DOMAINS = [
   'actions.google.com',
@@ -73,7 +73,7 @@ class PaymentsAsyncClient {
               (this.isInTrustedDomain_() && paymentOptions['i'] &&
                paymentOptions['i']['googleTransactionId']) ?
                   paymentOptions['i']['googleTransactionId'] :
-                  this.createGoogleTransactionId_(this.environment_));
+                  createGoogleTransactionId(this.environment_));
     }
 
     /** @private @const {!PaymentOptions} */
@@ -417,17 +417,6 @@ class PaymentsAsyncClient {
           }
         });
     this.onPaymentResponse_(response);
-  }
-
-  /**
-   * Returns a google transaction id.
-   *
-   * @param {string} environment
-   * @return {string}
-   * @private
-   */
-  createGoogleTransactionId_(environment) {
-    return uuid.uuidFast() + '.' + environment;
   }
 
   /**
