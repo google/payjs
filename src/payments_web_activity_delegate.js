@@ -416,6 +416,10 @@ class PaymentsWebActivityDelegate {
    * @return {string}
    */
   getOrigin_() {
+    if (this.environment_ == Constants.Environment.LOCAL) {
+      return '';
+    }
+
     var baseDomain;
     if (this.environment_ == Constants.Environment.PREPROD) {
       baseDomain = 'pay-preprod.sandbox';

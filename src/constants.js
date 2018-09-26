@@ -25,6 +25,7 @@ const Constants = {};
  * @enum {string}
  */
 Constants.Environment = {
+  LOCAL: 'LOCAL',
   PREPROD: 'PREPROD',
   PRODUCTION: 'PRODUCTION',
   SANDBOX: 'SANDBOX',
