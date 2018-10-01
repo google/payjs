@@ -100,7 +100,9 @@ class PaymentsAsyncClient {
     this.delegate_.onResult(this.onResult_.bind(this));
 
     PayFrameHelper.load(
-        this.environment_, PaymentsAsyncClient.googleTransactionId_);
+        this.environment_, PaymentsAsyncClient.googleTransactionId_,
+        this.paymentOptions_.merchantInfo &&
+            this.paymentOptions_.merchantInfo.merchantId);
     // If web delegate is used anyway then this is overridden in the web
     // activity delegate when load payment data is called.
     if (chromeSupportsPaymentHandler()) {
@@ -123,7 +125,7 @@ class PaymentsAsyncClient {
    * @export
    */
   isReadyToPay(isReadyToPayRequest) {
-    // Merge with gPayInitParams, preferring values from isReadyToPayRequest
+    // Merge with paymentOptions, preferring values from isReadyToPayRequest
     if (isReadyToPayRequest) {
       isReadyToPayRequest =
           Object.assign({}, this.paymentOptions_, isReadyToPayRequest);
