@@ -356,15 +356,17 @@ class PaymentsAsyncClient {
   /**
    * Return a <div> element containing a Google Pay payment button.
    *
-   * @param {ButtonOptions=} options
+   * @param {!ButtonOptions=} options
    * @return {!Element}
    * @export
    */
   createButton(options = {}) {
     let button = createButtonHelper(options);
     // Only log if button was created successfully
+    const startTimeMs = Date.now();
     PayFrameHelper.postMessage({
       'eventType': PostMessageEventType.LOG_RENDER_BUTTON,
+      'clientLatencyStartMs': startTimeMs,
     });
     return button;
   }
