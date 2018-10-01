@@ -148,6 +148,13 @@ Constants.IFRAME_STYLE = `
     -webkit-appearance: none;
     left: 0;
 }
+@media (min-width: 480px) {
+  .${Constants.IFRAME_STYLE_CLASS}{
+    width: 480px !important;
+    left: -240px !important;
+    margin-left: calc(100vw - 100vw / 2) !important;
+  }
+}
 .${Constants.IFRAME_CONTAINER_CLASS} {
   background-color: rgba(0,0,0,0.26);
   bottom: 0;
@@ -158,16 +165,6 @@ Constants.IFRAME_STYLE = `
 }
 .iframeContainer {
   -webkit-overflow-scrolling: touch;
-}
-`;
-
-Constants.IFRAME_STYLE_BOTTOM = `
-@media (min-width: 480px) {
-  .${Constants.IFRAME_STYLE_CLASS}{
-    width: 480px !important;
-    left: -240px !important;
-    margin-left: calc(100vw - 100vw / 2) !important;
-  }
 }
 `;
 

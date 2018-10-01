@@ -111,8 +111,6 @@ class PaymentsWebActivityDelegate {
       injectStyleSheet(Constants.IFRAME_STYLE);
       if (null) {
         injectStyleSheet(Constants.IFRAME_STYLE_CENTER);
-      } else {
-        injectStyleSheet(Constants.IFRAME_STYLE_BOTTOM);
       }
     }
 
