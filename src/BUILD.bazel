@@ -40,7 +40,6 @@ closure_js_library(
         "payments_request_delegate.js",
         "payments_web_activity_delegate.js",
         "post_message_service.js",
-        "redirect_verifier_helper.js",
         "upi_handler.js",
         "utils.js",
         "validator.js",

@@ -116,10 +116,6 @@ Constants.IS_READY_TO_PAY_RESULT_KEY =
 Constants.UPI_CAN_MAKE_PAYMENT_CACHE_KEY =
     Constants.STORAGE_KEY_PREFIX + '.upi.canMakePaymentCache';
 
-/** @const {string} */
-Constants.REDIRECT_STORAGE_KEY =
-    Constants.STORAGE_KEY_PREFIX + '.redirect.key';
-
 
 Constants.CLASS_PREFIX = 'google-payments-';
 Constants.IFRAME_ACTIVE_CONTAINER_CLASS =

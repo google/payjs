@@ -18,7 +18,6 @@
 import {Constants} from './constants.js';
 import {Graypane} from './graypane.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
-import {RedirectVerifierHelper} from './redirect_verifier_helper.js';
 import {ActivityPort, ActivityPorts, ActivityIframePort} from '../third_party/web_activities/activity-ports.js';
 import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType} from './pay_frame_helper.js';
 import {doesMerchantSupportOnlyTokenizedCards} from './validator.js';
@@ -74,10 +73,6 @@ class PaymentsWebActivityDelegate {
     this.useIframe_ = opt_useIframe || false;
     /** @const {!ActivityPorts} */
     this.activities = opt_activities || new ActivityPorts(window);
-    // TODO: Make non-null and const once the
-    // "enable_redirect_verifier" experiment is launched.
-    /** @private {?RedirectVerifierHelper} */
-    this.redirectVerifierHelper_ = null;
     // TODO: Make non-null and const once the "enable_graypane"
     // experiment is launched.
     /** @private {?Graypane} */
@@ -112,12 +107,6 @@ class PaymentsWebActivityDelegate {
       if (null) {
         injectStyleSheet(Constants.IFRAME_STYLE_CENTER);
       }
-    }
-
-    if (null) {
-      // Prepare the redirect verifier to avoid popup blockers.
-      this.redirectVerifierHelper_ = new RedirectVerifierHelper(window);
-      this.redirectVerifierHelper_.prepare();
     }
 
     if (null) {
@@ -363,34 +352,12 @@ class PaymentsWebActivityDelegate {
     PayFrameHelper.setBuyFlowActivityMode(
         paymentDataRequest['forceRedirect'] ? BuyFlowActivityMode.REDIRECT :
                                               BuyFlowActivityMode.POPUP);
+    const opener = this.activities.open(
+        GPAY_ACTIVITY_REQUEST, this.getHostingPageUrl_(),
+        this.getRenderMode_(paymentDataRequest), paymentDataRequest,
+        {'width': 600, 'height': 600});
     if (null) {
-      // Notice that the callback for verifier may execute asynchronously.
-      this.redirectVerifierHelper_.useVerifier(verifier => {
-        if (verifier) {
-          paymentDataRequest['i'] = Object.assign(
-              paymentDataRequest['i'] || {},
-              {'redirectVerifier': verifier});
-        }
-        const opener = this.activities.open(
-            GPAY_ACTIVITY_REQUEST,
-            this.getHostingPageUrl_(),
-            this.getRenderMode_(paymentDataRequest),
-            paymentDataRequest,
-            {'width': 600, 'height': 600});
-        if (null) {
-          this.graypane_.show(opener && opener.targetWin);
-        }
-      });
-    } else {
-      const opener = this.activities.open(
-          GPAY_ACTIVITY_REQUEST,
-          this.getHostingPageUrl_(),
-          this.getRenderMode_(paymentDataRequest),
-          paymentDataRequest,
-          {'width': 600, 'height': 600});
-      if (null) {
-        this.graypane_.show(opener && opener.targetWin);
-      }
+      this.graypane_.show(opener && opener.targetWin);
     }
   }
 
@@ -446,14 +413,7 @@ class PaymentsWebActivityDelegate {
    * @return {string} The decryption url
    */
   getDecryptionUrl_() {
-    let url = this.getBasePath_() + '/apis/buyflow/process';
-    if (null) {
-      const redirectKey = this.redirectVerifierHelper_.restoreKey();
-      if (redirectKey) {
-        url += '?rk=' + encodeURIComponent(redirectKey);
-      }
-    }
-    return url;
+    return this.getBasePath_() + '/apis/buyflow/process';
   }
 
   /**
