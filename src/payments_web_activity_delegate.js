@@ -65,9 +65,10 @@ class PaymentsWebActivityDelegate {
    * @param {boolean=} opt_useIframe
    * @param {!ActivityPorts=} opt_activities Can be used to provide a shared
    *   activities manager. By default, the new manager is created.
+   * @param {?string=} opt_redirectKey The redirect key used for redirect mode.
    */
   constructor(environment, googleTransactionId, opt_useIframe,
-             opt_activities) {
+             opt_activities, opt_redirectKey) {
     this.environment_ = environment;
     /** @private @const {boolean} */
     this.useIframe_ = opt_useIframe || false;
@@ -95,6 +96,8 @@ class PaymentsWebActivityDelegate {
     this.dismissPromiseResolver_ = null;
     /** @const @private {string} */
     this.googleTransactionId_ = googleTransactionId;
+    /** @const @private {?string} */
+    this.redirectKey_ = opt_redirectKey || null;
 
     /**
      * @private {?ResizePayload}
@@ -413,7 +416,11 @@ class PaymentsWebActivityDelegate {
    * @return {string} The decryption url
    */
   getDecryptionUrl_() {
-    return this.getBasePath_() + '/apis/buyflow/process';
+    let url = this.getBasePath_() + '/apis/buyflow/process';
+    if (this.redirectKey_) {
+      url += '?rk=' + encodeURIComponent(this.redirectKey_);
+    }
+    return url;
   }
 
   /**

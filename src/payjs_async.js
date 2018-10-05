@@ -84,7 +84,8 @@ class PaymentsAsyncClient {
         this.environment_,
         PaymentsAsyncClient.googleTransactionId_,
         opt_useIframe,
-        opt_activities);
+        opt_activities,
+        paymentOptions['i'] && paymentOptions['i']['redirectKey']);
 
     const paymentRequestSupported = chromeSupportsPaymentRequest();
     // TODO: Remove the temporary hack that disable payments
