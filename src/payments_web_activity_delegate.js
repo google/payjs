@@ -119,10 +119,6 @@ class PaymentsWebActivityDelegate {
     this.callback_ = callback;
     this.activities.onResult(GPAY_ACTIVITY_REQUEST,
                              this.onActivityResult_.bind(this));
-    // TODO: Remove once the GPAY_ACTIVITY_REQUEST is fully
-    // deployed.
-    this.activities.onResult('request1',
-                             this.onActivityResult_.bind(this));
   }
 
   /**
@@ -185,9 +181,6 @@ class PaymentsWebActivityDelegate {
               'statusCode': 'CANCELED',
             };
           }
-          console.log(
-              'Google Pay request failed, error:\n' +
-              JSON.stringify(inferredError));
           return Promise.reject(inferredError);
         }));
   }
