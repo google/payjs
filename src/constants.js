@@ -193,6 +193,9 @@ Constants.IFRAME_STYLE_CENTER = `
 }
 `;
 
+Constants.GPAY_BUTTON_WITH_CARD_INFO_IMAGE =
+    'background-image: url(https://pay.google.com/gp/p/generate_gpay_btn_img);';
+
 Constants.BUTTON_LOCALE_TO_MIN_WIDTH = {
   'en': 152,
   'bg': 163,
@@ -289,6 +292,42 @@ Constants.BUTTON_STYLE = `
   background-color: #f8f8f8;
 }
 `;
+
+/**
+ * Class used for the new gpay button with card info (last 4 digits, card net).
+ *
+ * @const {string}
+ */
+Constants.GPAY_BUTTON_CARD_INFO_CLASS = 'gpay-card-info-btn';
+
+Constants.GPAY_BUTTON_CARD_INFO_BUTTON_STYLE = `
+  .${Constants.GPAY_BUTTON_CARD_INFO_CLASS} {
+    background-origin: content-box;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    border: 0px;
+    border-radius: 4px;
+    box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 1px 0px, rgba(60, 64, 67, 0.15) 0px 1px 3px 1px;
+    cursor: pointer;
+    height: 40px;
+    min-height: 40px;
+    padding: 11px 24px;
+    background-color: #000;
+    box-shadow: none;
+    padding: 9px 24px 10px;
+    min-width: 190px;
+    width: 240px;
+  }
+
+  .${Constants.GPAY_BUTTON_CARD_INFO_CLASS}.active {
+    background-color: #5f6368;
+  }
+
+  .${Constants.GPAY_BUTTON_CARD_INFO_CLASS}.hover {
+    background-color: #3c4043;
+  }
+  `;
 
 /**
  * Trusted domain for secure context validation

@@ -28,6 +28,10 @@ let hasStylesheetBeenInjected_ = false;
  * @return {!Element}
  */
 function createButtonHelper(options = {}) {
+  if (null) {
+    return createButtonWithCardInfo();
+  }
+
   if (!hasStylesheetBeenInjected_) {
     injectStyleSheet(Constants.BUTTON_STYLE);
     injectStyleSheet(getLongGPayButtonCss_());
@@ -53,6 +57,27 @@ function createButtonHelper(options = {}) {
   } else {
     throw new Error('Parameter \'onClick\' must be set.');
   }
+  const div = document.createElement('div');
+  div.appendChild(button);
+  return div;
+}
+
+/**
+ * Return a <div> element containing a Google Pay payment button with the user's
+ * card information (last 4 digits of card number and card network).
+ *
+ * @return {!Element}
+ * @private
+ */
+function createButtonWithCardInfo() {
+  if (!hasStylesheetBeenInjected_) {
+    injectStyleSheet(Constants.GPAY_BUTTON_CARD_INFO_BUTTON_STYLE);
+    hasStylesheetBeenInjected_ = true;
+  }
+  const button = document.createElement('button');
+  button.setAttribute('class', Constants.GPAY_BUTTON_CARD_INFO_CLASS);
+  button.setAttribute('style', Constants.GPAY_BUTTON_WITH_CARD_INFO_IMAGE);
+  addButtonEventListenersForStyling(button);
   const div = document.createElement('div');
   div.appendChild(button);
   return div;
