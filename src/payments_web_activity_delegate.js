@@ -74,10 +74,8 @@ class PaymentsWebActivityDelegate {
     this.useIframe_ = opt_useIframe || false;
     /** @const {!ActivityPorts} */
     this.activities = opt_activities || new ActivityPorts(window);
-    // TODO: Make non-null and const once the "enable_graypane"
-    // experiment is launched.
-    /** @private {?Graypane} */
-    this.graypane_ = null;
+    /** @const @private {!Graypane} */
+    this.graypane_ = new Graypane(window.document);
     /** @private {?function(!Promise<!PaymentData>)} */
     this.callback_ = null;
     /**
@@ -111,11 +109,6 @@ class PaymentsWebActivityDelegate {
         injectStyleSheet(Constants.IFRAME_STYLE_CENTER);
       }
     }
-
-    if (null) {
-      // Prepare the graypane.
-      this.graypane_ = new Graypane(window.document);
-    }
   }
 
   /** @override */
@@ -138,9 +131,7 @@ class PaymentsWebActivityDelegate {
    */
   onActivityResult_(port) {
     // Hide the graypane.
-    if (null) {
-      this.graypane_.hide();
-    }
+    this.graypane_.hide();
     // Only verified origins are allowed.
     this.callback_(port.acceptResult().then(
         (result) => {
@@ -359,9 +350,7 @@ class PaymentsWebActivityDelegate {
         GPAY_ACTIVITY_REQUEST, this.getHostingPageUrl_(),
         this.getRenderMode_(paymentDataRequest), paymentDataRequest,
         {'width': 600, 'height': 600});
-    if (null) {
-      this.graypane_.show(opener && opener.targetWin);
-    }
+    this.graypane_.show(opener && opener.targetWin);
   }
 
   /**
