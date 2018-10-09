@@ -163,17 +163,17 @@ function getLongGPayButtonCss_() {
   const minWidth = Constants.BUTTON_LOCALE_TO_MIN_WIDTH[locale];
 
   return `
-    .long {
+    .${Constants.GPAY_BUTTON_CLASS}.long {
       min-width: ${minWidth}px;
       width: 240px;
     }
 
-    .white.long {
+    .${Constants.GPAY_BUTTON_CLASS}.white.long {
       background-image: url(https://www.gstatic.com/instantbuy/svg/light/${
       locale}.svg);
     }
 
-    .black.long {
+    .${Constants.GPAY_BUTTON_CLASS}.black.long {
       background-image: url(https://www.gstatic.com/instantbuy/svg/dark/${
       locale}.svg);
     }`;
