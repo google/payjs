@@ -23,13 +23,14 @@ import {PostMessageService} from './post_message_service.js';
  *
  * @enum {number}
  */
-// Next Id: 9
+// Next Id: 10
 const PostMessageEventType = {
   IS_READY_TO_PAY: 6,
   LOG_BUTTON_CLICK: 5,
   LOG_IS_READY_TO_PAY_API: 0,
   LOG_LOAD_PAYMENT_DATA_API: 1,
   LOG_RENDER_BUTTON: 2,
+  LOG_INITIALIZE_PAYMENTS_CLIENT: 9,
   LOG_INLINE_PAYMENT_WIDGET_INITIALIZE: 4,
   LOG_INLINE_PAYMENT_WIDGET_SUBMIT: 3,
   LOG_INLINE_PAYMENT_WIDGET_DISPLAYED: 7,
@@ -78,6 +79,9 @@ let postMessageService = null;
 /** @type {?string} */
 let environment = null;
 
+/** @type {?string} */
+let googleTransactionId = null;
+
 /** @type {?BuyFlowActivityMode} */
 let buyFlowActivityMode = null;
 
@@ -91,23 +95,21 @@ class PayFrameHelper {
   /**
    * Creates a hidden iframe for logging and appends it to the top level
    * document.
-   *
-   * @param {string} env
-   * @param {string} googleTransactionId
-   * @param {string|null=} merchantId
    */
-  static load(env, googleTransactionId, merchantId) {
+  static load() {
     if (iframe) {
       return;
     }
-    environment = env;
+    const initOptions =
+        /** @type {!PaymentOptions} */ (window['gpayInitParams']) || {};
+    environment = initOptions.environment || Constants.Environment.PRODUCTION;
     iframe = document.createElement('iframe');
     // Pass in origin because document.referrer inside iframe is empty in
     // certain cases
     // Can be replaced by iframe.src=... in non Google context.
     iframe.src = PayFrameHelper.getIframeUrl_(
-            window.location.origin, Date.now(), googleTransactionId,
-            merchantId);
+            window.location.origin,
+            initOptions.merchantInfo && initOptions.merchantInfo.merchantId);
     iframe.height = '0';
     iframe.width = '0';
     iframe.style.display = 'none';
@@ -115,6 +117,22 @@ class PayFrameHelper {
     iframe.onload = function() {
       PayFrameHelper.iframeLoaded();
     };
+    // If the body is already loaded, just append the iframe. Otherwise, we wait
+    // until the DOM has loaded to append the iframe, otherwise document.body is
+    // null.
+    if (document.body) {
+      PayFrameHelper.initialize_();
+    } else {
+      document.addEventListener(
+          'DOMContentLoaded', () => PayFrameHelper.initialize_());
+    }
+  }
+
+  /**
+   * Appends the iframe to the DOM and updates the post message service.
+   * @private
+   */
+  static initialize_() {
     document.body.appendChild(iframe);
     postMessageService = new PostMessageService(iframe.contentWindow);
   }
@@ -178,6 +196,7 @@ class PayFrameHelper {
     const postMessageData = Object.assign(
         {
           'buyFlowActivityMode': buyFlowActivityMode,
+          'googleTransactionId': googleTransactionId,
         },
         data);
     postMessageService.postMessage(
@@ -185,13 +204,21 @@ class PayFrameHelper {
   }
 
   /**
-   *
    * Sets the activity mode.
    *
    * @param {!BuyFlowActivityMode} mode
    */
   static setBuyFlowActivityMode(mode) {
     buyFlowActivityMode = mode;
+  }
+
+  /**
+   * Sets the google transaction id.
+   *
+   * @param {string} txnId
+   */
+  static setGoogleTransactionId(txnId) {
+    googleTransactionId = txnId;
   }
 
   /**
@@ -230,6 +257,7 @@ class PayFrameHelper {
     buffer.forEach(function(data) {
       PayFrameHelper.postMessage(data);
     });
+    buffer.length = 0;
   }
 
   /**
@@ -271,26 +299,21 @@ class PayFrameHelper {
    * Returns the payframe URL based on the environment.
    *
    * @param {string} origin The origin that is opening the payframe.
-   * @param {number} initializeTimeMs The time the payframe was initialized.
-   * @param {string} googleTransactionId The transaction id for
-   * this payments client.
    * @param {string|null=} merchantId The merchant id.
    * @return {string}
    * @private
    */
-  static getIframeUrl_(
-      origin, initializeTimeMs, googleTransactionId, merchantId) {
+  static getIframeUrl_(origin, merchantId) {
     // TrustedResourceUrl header needs to start with https or '//'.
-    const iframeUrl = 'https://pay' +
-        (environment == Constants.Environment.PREPROD ?
+    const iframeUrl = `https://pay${environment == Constants.Environment.PREPROD ?
              '-preprod.sandbox' :
-             environment == Constants.Environment.SANDBOX ? '.sandbox' : '') +
-        '.google.com/gp/p/ui/payframe?origin=' +
-        '%{windowOrigin}&t=%{initializeTimeMs}&' +
-        'gTxnId=%{googleTransactionId}&mid=%{merchantId}';
+             environment == Constants.Environment.SANDBOX ? '.sandbox' : ''}.google.com/gp/p/ui/payframe?origin=${origin}&mid=%{merchantId}`;
     return iframeUrl;
   }
 }
+
+// Start loading pay frame early
+PayFrameHelper.load();
 
 export {
   BuyFlowActivityMode,
