@@ -28,23 +28,32 @@ google.payments.api = {};
 
 /**
  * The client for interacting with the Google Pay APIs.
+ * @param {!PaymentOptions=} paymentOptions
+ * @param {boolean=} opt_useIframe
  * @constructor
  * @see https://developers.google.com/pay/api/web/client-reference.
  */
 google.payments.api.PaymentsClient = function(paymentOptions, opt_useIframe) {};
 
 /**
+ * @param {!IsReadyToPayRequest} isReadyToPayRequest
+ * @return {!Promise<?>}
  * @see https://developers.google.com/pay/api/web/client-reference#isReadyToPay
  */
-google.payments.api.PaymentsClient.prototype.isReadyToPay = function() {};
+google.payments.api.PaymentsClient.prototype.isReadyToPay = function(
+    isReadyToPayRequest) {};
 
 /**
+ * @param {!PaymentDataRequest} paymentDataRequest Provides necessary
+ * @return {!Promise<!PaymentData>}
  * @see https://developers.google.com/pay/api/web/client-reference#loadPaymentData
  */
-google.payments.api.PaymentsClient.prototype.loadPaymentData = function() {};
+google.payments.api.PaymentsClient.prototype.loadPaymentData = function(
+    paymentDataRequest) {};
 
 /**
+ * @param {!PaymentDataRequest} paymentDataRequest
  * @see https://developers.google.com/pay/api/web/client-reference#prefetchPaymentData
  */
-google.payments.api.PaymentsClient.prototype.prefetchPaymentData =
-    function() {};
+google.payments.api.PaymentsClient.prototype.prefetchPaymentData = function(
+    paymentDataRequest) {};

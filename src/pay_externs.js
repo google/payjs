@@ -87,6 +87,7 @@ var IsReadyToPayRequest = {};
  *   shippingAddressRequirements: (?ShippingAddressRequirements|undefined),
  *   transactionInfo: (?TransactionInfo|undefined),
  *   swg: (?SwgParameters|undefined),
+ *   i: (?InternalParameters|undefined),
  * }}
  *
  * @property {string} merchantId The obfuscated merchant gaia id.
