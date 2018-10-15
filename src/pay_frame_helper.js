@@ -82,6 +82,9 @@ let environment = null;
 /** @type {?string} */
 let googleTransactionId = null;
 
+/** @type {number} */
+let originTimeMs = Date.now();
+
 /** @type {?BuyFlowActivityMode} */
 let buyFlowActivityMode = null;
 
@@ -197,6 +200,7 @@ class PayFrameHelper {
         {
           'buyFlowActivityMode': buyFlowActivityMode,
           'googleTransactionId': googleTransactionId,
+          'originTimeMs': originTimeMs,
         },
         data);
     postMessageService.postMessage(
@@ -219,6 +223,15 @@ class PayFrameHelper {
    */
   static setGoogleTransactionId(txnId) {
     googleTransactionId = txnId;
+  }
+
+  /**
+   * Sets the originTimeMs. To be used only for tests.
+   *
+   * @param {number} originTimeMsTemp
+   */
+  static setOriginTimeMs(originTimeMsTemp) {
+    originTimeMs = originTimeMsTemp;
   }
 
   /**
