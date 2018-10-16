@@ -116,11 +116,19 @@ class PayFrameHelper {
     iframe.src = PayFrameHelper.getIframeUrl_(
             window.location.origin,
             initOptions.merchantInfo && initOptions.merchantInfo.merchantId);
+    PayFrameHelper.postMessage({
+      'eventType': PostMessageEventType.LOG_PAY_FRAME_REQUESTED,
+      'clientLatencyStartMs': Date.now(),
+    });
     iframe.height = '0';
     iframe.width = '0';
     iframe.style.display = 'none';
     iframe.style.visibility = 'hidden';
     iframe.onload = function() {
+      PayFrameHelper.postMessage({
+        'eventType': PostMessageEventType.LOG_PAY_FRAME_LOADED_WITH_ALL_JS,
+        'clientLatencyStartMs': Date.now(),
+      });
       PayFrameHelper.iframeLoaded();
     };
     // If the body is already loaded, just append the iframe. Otherwise, we wait
