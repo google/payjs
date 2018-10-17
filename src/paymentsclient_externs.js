@@ -57,3 +57,13 @@ google.payments.api.PaymentsClient.prototype.loadPaymentData = function(
  */
 google.payments.api.PaymentsClient.prototype.prefetchPaymentData = function(
     paymentDataRequest) {};
+
+/**
+ * Notifies Google that some offers may be available for the user if they choose
+ * to pay with Google Pay. This can be called anywhere on the merchant site.
+ * Google can choose to display a notification banner to inform user of the
+ * offer.
+ * @param {!PreNotificationOfferDetails} preNotificationOfferDetails
+ */
+google.payments.api.PaymentsClient.prototype.notifyAvailableOffers = function(
+    preNotificationOfferDetails) {};

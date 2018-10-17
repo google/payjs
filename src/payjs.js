@@ -72,6 +72,20 @@ class PaymentsClient {
   }
 
   /**
+   * Notifies Google that some offers may be available for the user if they
+   * choose to pay with Google Pay. This can be called anywhere on the merchant
+   * site. Google can choose to display a notification banner to inform
+   * user of the offer.
+   *
+   * @param {!PreNotificationOfferDetails} preNotificationOfferDetails Details
+   *     for the offer pre-notification.
+   * @export
+   */
+  notifyAvailableOffers(preNotificationOfferDetails) {
+    // TODO: Implement this.
+  }
+
+  /**
    * Request PaymentData, which contains necessary infomartion to complete a
    * payment.
    *

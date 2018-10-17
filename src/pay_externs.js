@@ -357,3 +357,13 @@ var PaymentData = {};
  * }}
  */
 var UserAddress = {};
+
+/**
+ * Offer details for pre-notification. Description for the offer should not
+ * exceed 30 characters.
+ *
+ * @typedef {{
+ *   description: string
+ * }}
+ */
+var PreNotificationOfferDetails = {};
