@@ -29,7 +29,11 @@ let hasStylesheetBeenInjected_ = false;
  */
 function createButtonHelper(options = {}) {
   if (null) {
-    return createButtonWithCardInfo();
+    const button = createButtonWithCardInfo();
+    if (options.onClick) {
+      button.addEventListener('click', options.onClick);
+    }
+    return button;
   }
 
   if (!hasStylesheetBeenInjected_) {
