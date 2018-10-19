@@ -1,12 +1,12 @@
 load("@io_bazel_rules_closure//closure:defs.bzl", "closure_js_binary", "closure_js_library")
 
+# The experiment flag is controlled in //depot/google3/java/com/google/wallet/boq/instantbuy/frontend/http/config/experiments.pi
+# Please make sure your new change here is pushed in the target environment before you flip the flag in experiments.pi.
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],  # Apache 2.0
 )
-
-# The experiment flag is controlled in //depot/google3/java/com/google/wallet/boq/instantbuy/frontend/http/config/experiments.pi
-# Please make sure your new change here is pushed in the target environment before you flip the flag in experiments.pi.
 
 exports_files(["LICENSE"])
 
