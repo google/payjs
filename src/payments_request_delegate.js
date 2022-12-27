@@ -18,6 +18,7 @@
 /**
  * @fileoverview Description of this file.
  */
+import {CallbackHandler} from './callback_handler.js';
 import {Constants} from './constants.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
 
@@ -35,6 +36,39 @@ class PaymentsRequestDelegate {
 
     /** @private {?function(!Promise<!PaymentData>)} */
     this.callback_ = null;
+
+    /** @private {?PaymentDataCallbacks} */
+    this.paymentDataCallbacks_ = null;
+
+    /**
+     * This is defined for testing.
+     * @type {?Promise<undefined>}
+     */
+    this.paymentDataCallbackPromise = null;
+
+    /**
+     * This is defined for testing.
+     * @protected {?Promise<undefined>}
+     */
+    this.paymentAuthorizationCallbackPromise = null;
+
+    /**
+     * @private {number}
+     */
+    this.requestTimeoutLimit_ = Constants.DEFAULT_REQUEST_TIMEOUT_LIMIT;
+  }
+
+  /**
+   * Set up a timeout promise for testing purpose
+   * @param {number} newRequestTimeoutLimit
+   */
+  withRequestTimeoutLimit(newRequestTimeoutLimit) {
+    this.requestTimeoutLimit_ = newRequestTimeoutLimit;
+  }
+
+  /** @override */
+  registerPaymentDataCallbacks(paymentDataCallbacks) {
+    this.paymentDataCallbacks_ = paymentDataCallbacks;
   }
 
   /** @override */
@@ -47,7 +81,15 @@ class PaymentsRequestDelegate {
     /** @type{!PaymentRequest} */
     const paymentRequest = this.createPaymentRequest_(isReadyToPayRequest);
     return new Promise((resolve, reject) => {
-      paymentRequest.canMakePayment()
+      let promise;
+      // hasEnrolledInstrument started being available on Chrome 74.
+      // For older versions of chrome, we fallback to canMakePayments.
+      if (paymentRequest.hasEnrolledInstrument != undefined) {
+        promise = paymentRequest.hasEnrolledInstrument();
+      } else {
+        promise = paymentRequest.canMakePayment();
+      }
+      promise
           .then(result => {
             window.sessionStorage.setItem(
                 Constants.IS_READY_TO_PAY_RESULT_KEY, result.toString());
@@ -91,6 +133,7 @@ class PaymentsRequestDelegate {
   /** @override */
   loadPaymentData(paymentDataRequest) {
     this.loadPaymentDataThroughPaymentRequest_(paymentDataRequest);
+    return;
   }
 
   /**
@@ -147,6 +190,31 @@ class PaymentsRequestDelegate {
   }
 
   /**
+   * Handle paymentMethodChange event.
+   *
+   * @param {!PaymentMethodChangeEvent} ev
+   * @package
+   */
+  handleOnPaymentMethodChange(ev) {
+    const callbackHandler = new CallbackHandler();
+    let promiseForNewDetails;
+    if (ev.methodDetails.callbackTrigger) {
+      promiseForNewDetails =
+          callbackHandler
+              .makePartialPaymentDataCallbackAndGenerateMessageForPaymentHandler(
+                  ev.methodDetails, this.paymentDataCallbacks_,
+                  this.requestTimeoutLimit_);
+    } else {
+      promiseForNewDetails =
+          callbackHandler
+              .makeFullPaymentDataCallbackAndGenerateMessageForPaymentHandler(
+                  ev.methodDetails, this.paymentDataCallbacks_,
+                  this.requestTimeoutLimit_);
+    }
+    ev.updateWith(promiseForNewDetails);
+  }
+
+  /**
    * @param {!PaymentDataRequest} paymentDataRequest Provides necessary
    *     information to support a payment.
    * @private
@@ -160,6 +228,11 @@ class PaymentsRequestDelegate {
         undefined;
     const paymentRequest = this.createPaymentRequest_(
         paymentDataRequest, this.environment_, currencyCode, totalPrice);
+
+    paymentRequest.onpaymentmethodchange = ev => {
+      this.handleOnPaymentMethodChange(ev);
+    };
+
     this.callback_(
         /** @type{!Promise<!PaymentData>} */
         (paymentRequest.show()
@@ -169,11 +242,27 @@ class PaymentsRequestDelegate {
                   * @return {!PaymentData}
                   */
                  (paymentResponse) => {
+                   if (null) {
+                     console.log('payment response', paymentResponse);
+                   }
                    // Should be called to dismiss any remaining UI
                    paymentResponse.complete('success');
-                   return paymentResponse.details;
+                   if (paymentResponse['details']['statusCode']) {
+                     if (null) {
+                       console.log(
+                           'status code', paymentResponse.details.statusCode);
+                     }
+                     return {
+                       'error': paymentResponse['details'],
+                     };
+                   }
+                   return paymentResponse['details'];
                  })
              .catch(function(err) {
+               if (null) {
+                 console.log('payment response with err', err);
+               }
+               // TODO: combine the error handling cases.
                err['statusCode'] = Constants.ResponseStatus.CANCELED;
                throw err;
              })));

@@ -1,11 +1,12 @@
 # Description:
 #   JavaScript library for Random UUID generator.
 
-load("@io_bazel_rules_closure//closure:defs.bzl", "closure_js_library", "closure_js_binary")
+load("@io_bazel_rules_closure//closure:defs.bzl", "closure_js_binary", "closure_js_library")
+load("//tools/build_defs/js:rules.bzl", "js_library")
 
 package(
     default_visibility = ["//visibility:public"],
-    licenses = ["notice"],  # Dual MIT, GPL
+    licenses = ["notice"],
 )
 
 exports_files(["LICENSE"])

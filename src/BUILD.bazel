@@ -1,4 +1,5 @@
 load("@io_bazel_rules_closure//closure:defs.bzl", "closure_js_binary", "closure_js_library")
+load("//tools/build_defs/js:rules.bzl", "web_chunk", "web_chunk_set")
 
 # The experiment flag is controlled in //depot/google3/java/com/google/wallet/boq/instantbuy/frontend/http/config/experiments.pi
 # Please make sure your new change here is pushed in the target environment before you flip the flag in experiments.pi.
@@ -8,10 +9,32 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
+## Pinto / Modulesets rules
+web_chunk_set(
+    name = "js_api_module_set",
+    chunk_graph_root_target = ":payjs_module",
+    id = "InstantbuyFrontendJs",
+    transitive_chunk_aggregation = False,
+    deps = [
+        ":payjs_module",
+    ],
+)
+
+web_chunk(
+    name = "payjs_module",
+    chunk_id = "payjs",
+    exports = [
+        ":payjs",
+    ],
+)
+
 exports_files(["LICENSE"])
 
 closure_js_binary(
     name = "pay",
+    extra_inputs = [
+        "conformance_proto.txt",
+    ],
     deps = [
         ":payjs",
     ],
@@ -28,7 +51,28 @@ closure_js_binary(
 closure_js_library(
     name = "payjs",
     srcs = [
+        "static_initialization.js",
+    ],
+    check_level = "LOOSE",
+    suppress = [
+        "JSC_INEXISTENT_PROPERTY",
+        "JSC_INVALID_OPERAND_TYPE",
+        "JSC_STRICT_INEXISTENT_PROPERTY",
+        "JSC_TYPE_MISMATCH",
+        "JSC_UNKNOWN_EXPR_TYPE",
+        "JSC_UNREACHABLE_CODE",
+        "JSC_UNUSED_PRIVATE_PROPERTY",
+    ],
+    exports = [":payjs_without_static_init"],
+    deps = [":payjs_without_static_init"],
+)
+
+# This target is used for testing only.
+closure_js_library(
+    name = "payjs_without_static_init",
+    srcs = [
         "button.js",
+        "callback_handler.js",
         "constants.js",
         "element_injector.js",
         "graypane.js",
@@ -40,22 +84,21 @@ closure_js_library(
         "payments_request_delegate.js",
         "payments_web_activity_delegate.js",
         "post_message_service.js",
-        "upi_handler.js",
+        "types.js",
         "utils.js",
         "validator.js",
     ],
-    suppress = [
-        "JSC_INEXISTENT_PROPERTY",
-        "JSC_INVALID_OPERAND_TYPE",
-        "JSC_STRICT_INEXISTENT_PROPERTY",
-        "JSC_TYPE_MISMATCH",
-        "JSC_UNKNOWN_EXPR_TYPE",
-        "JSC_UNREACHABLE_CODE",
-        "JSC_UNUSED_PRIVATE_PROPERTY",
-    ],
+    check_level = "LOOSE",
     deps = [
-        "//third_party/random_uuid:uuid",
-        "//third_party/web_activities:port",
+        "//java/com/google/wallet/boq/instantbuy/frontend/js:payjs_externs",
+        "//third_party/javascript/closure/dom",
+        "//third_party/javascript/closure/html:trustedresourceurl",
+        "//third_party/javascript/closure/string:const",
+        "//third_party/javascript/closure/style:transition",
+        "//third_party/javascript/closure/uri",
+        "//third_party/javascript/random_uuid:uuid",
+        "//third_party/javascript/safevalues/dom",
+        "//third_party/javascript/web_activities:port",
     ],
 )
 
@@ -71,9 +114,15 @@ closure_js_library(
     name = "payjs_validator",
     srcs = [
         "constants.js",
+        "utils.js",
         "validator.js",
     ],
+    check_level = "LOOSE",
     suppress = ["JSC_UNKNOWN_EXPR_TYPE"],
+    deps = [
+        "//third_party/javascript/closure/string:const",
+        "//third_party/javascript/random_uuid:uuid",
+    ],
 )
 
 closure_js_library(

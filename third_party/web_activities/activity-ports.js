@@ -18,7 +18,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- /** Version: 1.12 */
+ /** Version: 1.23 */
 
 
 /**
@@ -99,10 +99,16 @@ class ActivityResult {
  *   redirect is used. By default, the activity request is appended to the
  *   activity URL. This option can be used if the activity request is passed
  *   to the activity by some alternative means.
+ * - disableRedirectFallback: disallows popup fallback to redirect. By default
+ *   the redirect fallback is allowed. This option has to be used very carefully
+ *   because there are many user agents that may fail to open a popup and it
+ *   won't be always possible for the opener window to even be aware of such
+ *   failures.
  *
  * @typedef {{
  *   returnUrl: (string|undefined),
  *   skipRequestInUrl: (boolean|undefined),
+ *   disableRedirectFallback: (boolean|undefined),
  *   width: (number|undefined),
  *   height: (number|undefined),
  * }}
@@ -139,6 +145,328 @@ class ActivityPort {
 }
 
 
+/**
+ * Activity client-side binding for messaging.
+ *
+ * Whether the host can or cannot receive a message depends on the type of
+ * host and its state. Ensure that the code has an alternative path if
+ * messaging is not available.
+ *
+ * @interface
+ */
+class ActivityMessagingPort {
+
+  /**
+   * Returns the target window where host is loaded. May be unavailable.
+   * @return {?Window}
+   */
+  getTargetWin() {}
+
+  /**
+   * Sends a message to the host.
+   * @param {!Object} payload
+   */
+  message(payload) {}
+
+  /**
+   * Registers a callback to receive messages from the host.
+   * @param {function(!Object)} callback
+   */
+  onMessage(callback) {}
+
+  /**
+   * Creates a new communication channel or returns an existing one.
+   * @param {string=} opt_name
+   * @return {!Promise<!MessagePort>}
+   */
+  messageChannel(opt_name) {}
+}
+
+
+
+/** DOMException.ABORT_ERR name */
+const ABORT_ERR_NAME = 'AbortError';
+
+/** DOMException.ABORT_ERR = 20 */
+const ABORT_ERR_CODE = 20;
+
+
+/** @type {?HTMLAnchorElement} */
+let aResolver;
+
+
+/**
+ * @param {string} urlString
+ * @return {!HTMLAnchorElement}
+ */
+function parseUrl(urlString) {
+  if (!aResolver) {
+    aResolver = /** @type {!HTMLAnchorElement} */ (document.createElement('a'));
+  }
+  aResolver.href = urlString;
+  return /** @type {!HTMLAnchorElement} */ (aResolver);
+}
+
+
+/**
+ * @param {!Location|!URL|!HTMLAnchorElement} loc
+ * @return {string}
+ */
+function getOrigin(loc) {
+  if (loc.origin) {
+    return loc.origin;
+  }
+  // Make sure that the origin is normalized. Specifically on IE, host sometimes
+  // includes the default port, which is not per standard.
+  const protocol = loc.protocol;
+  let host = loc.host;
+  if (protocol == 'https:' && host.indexOf(':443') == host.length - 4) {
+    host = host.replace(':443', '');
+  } else if (protocol == 'http:' && host.indexOf(':80') == host.length - 3) {
+    host = host.replace(':80', '');
+  }
+  return protocol + '//' + host;
+}
+
+
+/**
+ * @param {string} urlString
+ * @return {string}
+ */
+function getOriginFromUrl(urlString) {
+  return getOrigin(parseUrl(urlString));
+}
+
+
+/**
+ * @param {string} urlString
+ * @return {string}
+ */
+function removeFragment(urlString) {
+  const index = urlString.indexOf('#');
+  if (index == -1) {
+    return urlString;
+  }
+  return urlString.substring(0, index);
+}
+
+
+/**
+ * Parses and builds Object of URL query string.
+ * @param {string} query The URL query string.
+ * @return {!Object<string, string>}
+ */
+function parseQueryString(query) {
+  if (!query) {
+    return {};
+  }
+  return (/^[?#]/.test(query) ? query.slice(1) : query)
+      .split('&')
+      .reduce((params, param) => {
+        const item = param.split('=');
+        const key = decodeURIComponent(item[0] || '');
+        const value = decodeURIComponent(item[1] || '');
+        if (key) {
+          params[key] = value;
+        }
+        return params;
+      }, {});
+}
+
+
+/**
+ * @param {string} queryString  A query string in the form of "a=b&c=d". Could
+ *   be optionally prefixed with "?" or "#".
+ * @param {string} param The param to get from the query string.
+ * @return {?string}
+ */
+function getQueryParam(queryString, param) {
+  return parseQueryString(queryString)[param];
+}
+
+
+/**
+ * Add a query-like parameter to the fragment string.
+ * @param {string} url
+ * @param {string} param
+ * @param {string} value
+ * @return {string}
+ */
+function addFragmentParam(url, param, value) {
+  return url +
+      (url.indexOf('#') == -1 ? '#' : '&') +
+      encodeURIComponent(param) + '=' + encodeURIComponent(value);
+}
+
+
+/**
+ * @param {string} queryString  A query string in the form of "a=b&c=d". Could
+ *   be optionally prefixed with "?" or "#".
+ * @param {string} param The param to remove from the query string.
+ * @return {?string}
+ */
+function removeQueryParam(queryString, param) {
+  if (!queryString) {
+    return queryString;
+  }
+  const search = encodeURIComponent(param) + '=';
+  let index = -1;
+  do {
+    index = queryString.indexOf(search, index);
+    if (index != -1) {
+      const prev = index > 0 ? queryString.substring(index - 1, index) : '';
+      if (prev == '' || prev == '?' || prev == '#' || prev == '&') {
+        let end = queryString.indexOf('&', index + 1);
+        if (end == -1) {
+          end = queryString.length;
+        }
+        queryString =
+            queryString.substring(0, index) +
+            queryString.substring(end + 1);
+      } else {
+        index++;
+      }
+    }
+  } while (index != -1 && index < queryString.length);
+  return queryString;
+}
+
+
+/**
+ * @param {!ActivityRequest} request
+ * @return {string}
+ */
+function serializeRequest(request) {
+  const map = {
+    'requestId': request.requestId,
+    'returnUrl': request.returnUrl,
+    'args': request.args,
+  };
+  if (request.origin !== undefined) {
+    map['origin'] = request.origin;
+  }
+  if (request.originVerified !== undefined) {
+    map['originVerified'] = request.originVerified;
+  }
+  return JSON.stringify(map);
+}
+
+
+/**
+ * @param {*} error
+ * @return {boolean}
+ */
+function isAbortError(error) {
+  if (!error || typeof error != 'object') {
+    return false;
+  }
+  return (error['name'] === ABORT_ERR_NAME);
+}
+
+
+/**
+ * Creates or emulates a DOMException of AbortError type.
+ * See https://heycam.github.io/webidl/#aborterror.
+ * @param {!Window} win
+ * @param {string=} opt_message
+ * @return {!DOMException}
+ * @suppress {const}
+ */
+function createAbortError(win, opt_message) {
+  const message = 'AbortError' + (opt_message ? ': ' + opt_message : '');
+  let error = null;
+  if (typeof win['DOMException'] == 'function') {
+    // TODO: remove typecast once externs are fixed.
+    const constr = /** @type {function(new:DOMException, string, string)} */ (
+        win['DOMException']);
+    try {
+      error = new constr(message, ABORT_ERR_NAME);
+    } catch (e) {
+      // Ignore. In particular, `new DOMException()` fails in Edge.
+    }
+  }
+  if (!error) {
+    // TODO: remove typecast once externs are fixed.
+    const constr = /** @type {function(new:DOMException, string)} */ (
+        Error);
+    error = new constr(message);
+    error.name = ABORT_ERR_NAME;
+    error.code = ABORT_ERR_CODE;
+  }
+  return error;
+}
+
+
+/**
+ * Resolves the activity result as a promise:
+ *  - `OK` result is yielded as the promise's payload;
+ *  - `CANCEL` result is rejected with the `AbortError`;
+ *  - `FAILED` result is rejected with the embedded error.
+ *
+ * @param {!Window} win
+ * @param {!ActivityResult} result
+ * @param {function((!ActivityResult|!Promise))} resolver
+ */
+function resolveResult(win, result, resolver) {
+  if (result.ok) {
+    resolver(result);
+  } else {
+    const error = result.error || createAbortError(win);
+    error.activityResult = result;
+    resolver(Promise.reject(error));
+  }
+}
+
+
+/**
+ * @param {!Window} win
+ * @return {boolean}
+ */
+function isIeBrowser(win) {
+  // MSIE and Trident are typical user agents for IE browsers.
+  const nav = win.navigator;
+  return /Trident|MSIE|IEMobile/i.test(nav && nav.userAgent);
+}
+
+
+/**
+ * @param {!Window} win
+ * @return {boolean}
+ */
+function isEdgeBrowser(win) {
+  const nav = win.navigator;
+  return /Edge/i.test(nav && nav.userAgent);
+}
+
+
+/**
+ * @param {!Error} e
+ */
+function throwAsync(e) {
+  setTimeout(() => {throw e;});
+}
+
+
+/**
+ * Polyfill of the `Node.isConnected` API. See
+ * https://developer.mozilla.org/en-US/docs/Web/API/Node/isConnected.
+ * @param {!Node} node
+ * @return {boolean}
+ */
+function isNodeConnected(node) {
+  // Ensure that node is attached if specified. This check uses a new and
+  // fast `isConnected` API and thus only checked on platforms that have it.
+  // See https://www.chromestatus.com/feature/5676110549352448.
+  if ('isConnected' in node) {
+    return node['isConnected'];
+  }
+  // Polyfill.
+  const root = node.ownerDocument && node.ownerDocument.documentElement;
+  return (root && root.contains(node)) || false;
+}
+
+
+
 const SENTINEL = '__ACTIVITIES__';
 
 /**
@@ -151,6 +479,7 @@ const SENTINEL = '__ACTIVITIES__';
  */
 let ChannelHolder;
 
+
 /**
  * The messenger helper for activity's port and host.
  */
@@ -160,10 +489,12 @@ class Messenger {
    * @param {!Window} win
    * @param {!Window|function():?Window} targetOrCallback
    * @param {?string} targetOrigin
+   * @param {boolean} requireTarget
    */
-  constructor(win, targetOrCallback, targetOrigin) {
+  constructor(win, targetOrCallback, targetOrigin, requireTarget) {
     /** @private @const {!Window} */
     this.win_ = win;
+
     /** @private @const {!Window|function():?Window} */
     this.targetOrCallback_ = targetOrCallback;
 
@@ -172,6 +503,9 @@ class Messenger {
      * @private {?string}
      */
     this.targetOrigin_ = targetOrigin;
+
+    /** @private @const {boolean} */
+    this.requireTarget_ = requireTarget;
 
     /** @private {?Window} */
     this.target_ = null;
@@ -289,7 +623,18 @@ class Messenger {
    * "start" command. See `sendStartCommand` method.
    */
   sendConnectCommand() {
-    this.sendCommand('connect', {'acceptsChannel': true});
+    // TODO: MessageChannel is critically necessary for IE/Edge,
+    // since window messaging doesn't always work. It's also preferred as an API
+    // for other browsers: it's newer, cleaner and arguably more secure.
+    // Unfortunately, browsers currently do not propagate user gestures via
+    // MessageChannel, only via window messaging. This should be re-enabled
+    // once browsers fix user gesture propagation.
+    // See:
+    // Safari: https://bugs.webkit.org/show_bug.cgi?id=186593
+    // Chrome: https://bugs.chromium.org/p/chromium/issues/detail?id=851493
+    // Firefox: https://bugzilla.mozilla.org/show_bug.cgi?id=1469422
+    const acceptsChannel = isIeBrowser(this.win_) || isEdgeBrowser(this.win_);
+    this.sendCommand('connect', {'acceptsChannel': acceptsChannel});
   }
 
   /**
@@ -451,6 +796,13 @@ class Messenger {
    * @private
    */
   handleEvent_(event) {
+    if (this.requireTarget_ && this.getOptionalTarget_() != event.source) {
+      // When target is required, confirm it against the event.source. This
+      // is normally only needed for ports where a single window can include
+      // multiple iframes to match the event to a specific iframe. Otherwise,
+      // the origin checks below are sufficient.
+      return;
+    }
     const data = event.data;
     if (!data || data['sentinel'] != SENTINEL) {
       return;
@@ -533,214 +885,6 @@ function closePort(port) {
 
 
 
-/** DOMException.ABORT_ERR name */
-const ABORT_ERR_NAME = 'AbortError';
-
-/** DOMException.ABORT_ERR = 20 */
-const ABORT_ERR_CODE = 20;
-
-/** @type {?HTMLAnchorElement} */
-let aResolver;
-
-
-/**
- * @param {string} urlString
- * @return {!HTMLAnchorElement}
- */
-function parseUrl(urlString) {
-  if (!aResolver) {
-    aResolver = /** @type {!HTMLAnchorElement} */ (document.createElement('a'));
-  }
-  aResolver.href = urlString;
-  return /** @type {!HTMLAnchorElement} */ (aResolver);
-}
-
-
-/**
- * @param {!Location|!URL|!HTMLAnchorElement} loc
- * @return {string}
- */
-function getOrigin(loc) {
-  return loc.origin || loc.protocol + '//' + loc.host;
-}
-
-
-/**
- * @param {string} urlString
- * @return {string}
- */
-function getOriginFromUrl(urlString) {
-  return getOrigin(parseUrl(urlString));
-}
-
-
-/**
- * @param {string} urlString
- * @return {string}
- */
-function removeFragment(urlString) {
-  const index = urlString.indexOf('#');
-  if (index == -1) {
-    return urlString;
-  }
-  return urlString.substring(0, index);
-}
-
-
-/**
- * Parses and builds Object of URL query string.
- * @param {string} query The URL query string.
- * @return {!Object<string, string>}
- */
-function parseQueryString(query) {
-  if (!query) {
-    return {};
-  }
-  return (/^[?#]/.test(query) ? query.slice(1) : query)
-      .split('&')
-      .reduce((params, param) => {
-        const item = param.split('=');
-        const key = decodeURIComponent(item[0] || '');
-        const value = decodeURIComponent(item[1] || '');
-        if (key) {
-          params[key] = value;
-        }
-        return params;
-      }, {});
-}
-
-
-/**
- * @param {string} queryString  A query string in the form of "a=b&c=d". Could
- *   be optionally prefixed with "?" or "#".
- * @param {string} param The param to get from the query string.
- * @return {?string}
- */
-function getQueryParam(queryString, param) {
-  return parseQueryString(queryString)[param];
-}
-
-
-/**
- * Add a query-like parameter to the fragment string.
- * @param {string} url
- * @param {string} param
- * @param {string} value
- * @return {string}
- */
-function addFragmentParam(url, param, value) {
-  return url +
-      (url.indexOf('#') == -1 ? '#' : '&') +
-      encodeURIComponent(param) + '=' + encodeURIComponent(value);
-}
-
-
-/**
- * @param {string} queryString  A query string in the form of "a=b&c=d". Could
- *   be optionally prefixed with "?" or "#".
- * @param {string} param The param to remove from the query string.
- * @return {?string}
- */
-function removeQueryParam(queryString, param) {
-  if (!queryString) {
-    return queryString;
-  }
-  const search = encodeURIComponent(param) + '=';
-  let index = -1;
-  do {
-    index = queryString.indexOf(search, index);
-    if (index != -1) {
-      const prev = index > 0 ? queryString.substring(index - 1, index) : '';
-      if (prev == '' || prev == '?' || prev == '#' || prev == '&') {
-        let end = queryString.indexOf('&', index + 1);
-        if (end == -1) {
-          end = queryString.length;
-        }
-        queryString =
-            queryString.substring(0, index) +
-            queryString.substring(end + 1);
-      } else {
-        index++;
-      }
-    }
-  } while (index != -1 && index < queryString.length);
-  return queryString;
-}
-
-
-/**
- * @param {!ActivityRequest} request
- * @return {string}
- */
-function serializeRequest(request) {
-  const map = {
-    'requestId': request.requestId,
-    'returnUrl': request.returnUrl,
-    'args': request.args,
-  };
-  if (request.origin !== undefined) {
-    map['origin'] = request.origin;
-  }
-  if (request.originVerified !== undefined) {
-    map['originVerified'] = request.originVerified;
-  }
-  return JSON.stringify(map);
-}
-
-
-/**
- * Creates or emulates a DOMException of AbortError type.
- * See https://heycam.github.io/webidl/#aborterror.
- * @param {!Window} win
- * @param {string=} opt_message
- * @return {!DOMException}
- */
-function createAbortError(win, opt_message) {
-  const message = 'AbortError' + (opt_message ? ': ' + opt_message : '');
-  let error = null;
-  if (typeof win['DOMException'] == 'function') {
-    // TODO: remove typecast once externs are fixed.
-    const constr = /** @type {function(new:DOMException, string, string)} */ (
-        win['DOMException']);
-    try {
-      error = new constr(message, ABORT_ERR_NAME);
-    } catch (e) {
-      // Ignore. In particular, `new DOMException()` fails in Edge.
-    }
-  }
-  if (!error) {
-    // TODO: remove typecast once externs are fixed.
-    const constr = /** @type {function(new:DOMException, string)} */ (
-        Error);
-    error = new constr(message);
-    error.name = ABORT_ERR_NAME;
-    error.code = ABORT_ERR_CODE;
-  }
-  return error;
-}
-
-
-/**
- * Resolves the activity result as a promise:
- *  - `OK` result is yielded as the promise's payload;
- *  - `CANCEL` result is rejected with the `AbortError`;
- *  - `FAILED` result is rejected with the embedded error.
- *
- * @param {!Window} win
- * @param {!ActivityResult} result
- * @param {function((!ActivityResult|!Promise))} resolver
- */
-function resolveResult(win, result, resolver) {
-  if (result.ok) {
-    resolver(result);
-  } else {
-    const error = result.error || createAbortError(win);
-    error.activityResult = result;
-    resolver(Promise.reject(error));
-  }
-}
-
-
 
 /**
  * The `ActivityPort` implementation for the iframe case. Unlike other types
@@ -748,6 +892,7 @@ function resolveResult(win, result, resolver) {
  * to size requests.
  *
  * @implements {ActivityPort}
+ * @implements {ActivityMessagingPort}
  */
 class ActivityIframePort {
 
@@ -807,7 +952,8 @@ class ActivityIframePort {
     this.messenger_ = new Messenger(
         this.win_,
         () => this.iframe_.contentWindow,
-        this.targetOrigin_);
+        this.targetOrigin_,
+        /* requireTarget */ true);
   }
 
   /** @override */
@@ -820,7 +966,7 @@ class ActivityIframePort {
    * @return {!Promise}
    */
   connect() {
-    if (!this.win_.document.documentElement.contains(this.iframe_)) {
+    if (!isNodeConnected(this.iframe_)) {
       throw new Error('iframe must be in DOM');
     }
     this.messenger_.connect(this.handleCommand_.bind(this));
@@ -841,27 +987,22 @@ class ActivityIframePort {
     return this.resultPromise_;
   }
 
-  /**
-   * Sends a message to the host.
-   * @param {!Object} payload
-   */
+  /** @override */
+  getTargetWin() {
+    return this.iframe_.contentWindow || null;
+  }
+
+  /** @override */
   message(payload) {
     this.messenger_.customMessage(payload);
   }
 
-  /**
-   * Registers a callback to receive messages from the host.
-   * @param {function(!Object)} callback
-   */
+  /** @override */
   onMessage(callback) {
     this.messenger_.onCustomMessage(callback);
   }
 
-  /**
-   * Creates a new communication channel or returns an existing one.
-   * @param {string=} opt_name
-   * @return {!Promise<!MessagePort>}
-   */
+  /** @override */
   messageChannel(opt_name) {
     return this.messenger_.askChannel(opt_name);
   }
@@ -948,11 +1089,13 @@ class ActivityIframePort {
 
 
 
+
 /**
  * The `ActivityPort` implementation for the standalone window activity
  * client executed as a popup.
  *
  * @implements {ActivityPort}
+ * @implements {ActivityMessagingPort}
  */
 class ActivityWindowPort {
 
@@ -984,8 +1127,16 @@ class ActivityWindowPort {
     this.openTarget_ = target;
     /** @private @const {?Object} */
     this.args_ = opt_args || null;
-    /** @private @const {?ActivityOpenOptions} */
-    this.options_ = opt_options || null;
+    /** @private @const {!ActivityOpenOptions} */
+    this.options_ = opt_options || {};
+
+    /** @private {?function()} */
+    this.connectedResolver_ = null;
+
+    /** @private @const {!Promise} */
+    this.connectedPromise_ = new Promise(resolve => {
+      this.connectedResolver_ = resolve;
+    });
 
     /** @private {?function((!ActivityResult|!Promise))} */
     this.resultResolver_ = null;
@@ -1025,10 +1176,11 @@ class ActivityWindowPort {
   }
 
   /**
-   * @return {?Window}
+   * Waits until the activity port is connected to the host.
+   * @return {!Promise}
    */
-  getTargetWin() {
-    return this.targetWin_;
+  whenConnected() {
+    return this.connectedPromise_;
   }
 
   /**
@@ -1056,8 +1208,46 @@ class ActivityWindowPort {
   }
 
   /** @override */
+  getTargetWin() {
+    return this.targetWin_;
+  }
+
+  /** @override */
   acceptResult() {
     return this.resultPromise_;
+  }
+
+  /**
+   * Sends a message to the host.
+   * Whether the host can or cannot receive a message depends on the type of
+   * host and its state. Ensure that the code has an alternative path if
+   * messaging is not available.
+   * @override
+   */
+  message(payload) {
+    this.messenger_.customMessage(payload);
+  }
+
+  /**
+   * Registers a callback to receive messages from the host.
+   * Whether the host can or cannot receive a message depends on the type of
+   * host and its state. Ensure that the code has an alternative path if
+   * messaging is not available.
+   * @override
+   */
+  onMessage(callback) {
+    this.messenger_.onCustomMessage(callback);
+  }
+
+  /**
+   * Creates a new communication channel or returns an existing one.
+   * Whether the host can or cannot receive a message depends on the type of
+   * host and its state. Ensure that the code has an alternative path if
+   * messaging is not available.
+   * @override
+   */
+  messageChannel(opt_name) {
+    return this.messenger_.askChannel(opt_name);
   }
 
   /**
@@ -1075,9 +1265,9 @@ class ActivityWindowPort {
     // Protectively, the URL will contain the request payload, unless explicitly
     // directed not to via `skipRequestInUrl` option.
     let url = this.url_;
-    if (!(this.options_ && this.options_.skipRequestInUrl)) {
+    if (!this.options_.skipRequestInUrl) {
       const returnUrl =
-          this.options_ && this.options_.returnUrl ||
+          this.options_.returnUrl ||
           removeFragment(this.win_.location.href);
       const requestString = serializeRequest({
         requestId: this.requestId_,
@@ -1093,9 +1283,7 @@ class ActivityWindowPort {
     // IE does not support CORS popups - the popup has to fallback to redirect
     // mode.
     if (openTarget != '_top') {
-      // MSIE and Trident are typical user agents for IE browsers.
-      const nav = this.win_.navigator;
-      if (/Trident|MSIE|IEMobile/i.test(nav && nav.userAgent)) {
+      if (isIeBrowser(this.win_)) {
         openTarget = '_top';
       }
     }
@@ -1108,7 +1296,9 @@ class ActivityWindowPort {
       // Ignore.
     }
     // Then try with `_top` target.
-    if (!targetWin && openTarget != '_top') {
+    if (!targetWin &&
+        openTarget != '_top' &&
+        !this.options_.disableRedirectFallback) {
       openTarget = '_top';
       try {
         targetWin = this.win_.open(url, openTarget);
@@ -1145,8 +1335,7 @@ class ActivityWindowPort {
     const availWidth = screen.availWidth || screen.width;
     const availHeight = screen.availHeight || screen.height;
     const isTop = this.isTopWindow_();
-    const nav = this.win_.navigator;
-    const isEdge = /Edge/i.test(nav && nav.userAgent);
+    const isEdge = isEdgeBrowser(this.win_);
     // Limit controls to 100px width and height. Notice that it's only
     // possible to calculate controls size in the top window, not in iframes.
     // Notice that the Edge behavior is somewhat unique. If we can't find the
@@ -1166,13 +1355,11 @@ class ActivityWindowPort {
     const maxHeight = Math.max(availHeight - controlsHeight, availHeight * 0.5);
     let w = Math.floor(Math.min(600, maxWidth * 0.9));
     let h = Math.floor(Math.min(600, maxHeight * 0.9));
-    if (this.options_) {
-      if (this.options_.width) {
-        w = Math.min(this.options_.width, maxWidth);
-      }
-      if (this.options_.height) {
-        h = Math.min(this.options_.height, maxHeight);
-      }
+    if (this.options_.width) {
+      w = Math.min(this.options_.width, maxWidth);
+    }
+    if (this.options_.height) {
+      h = Math.min(this.options_.height, maxHeight);
     }
     const x = Math.floor((screen.width - w) / 2);
     const y = Math.floor((screen.height - h) / 2);
@@ -1221,7 +1408,8 @@ class ActivityWindowPort {
     this.messenger_ = new Messenger(
         this.win_,
         /** @type {!Window} */ (this.targetWin_),
-        /* targetOrigin */ null);
+        /* targetOrigin */ null,
+        /* requireTarget */ true);
     this.messenger_.connect(this.handleCommand_.bind(this));
   }
 
@@ -1293,6 +1481,7 @@ class ActivityWindowPort {
     if (cmd == 'connect') {
       // First ever message. Indicates that the receiver is listening.
       this.messenger_.sendStartCommand(this.args_);
+      this.connectedResolver_();
     } else if (cmd == 'result') {
       // The last message. Indicates that the result has been received.
       const code = /** @type {!ActivityResultCode} */ (payload['code']);
@@ -1321,8 +1510,7 @@ function discoverRedirectPort(win, fragment, requestId) {
   if (!fragmentParam) {
     return null;
   }
-  const response = /** @type {?Object} */ (JSON.parse(
-      decodeURIComponent(fragmentParam)));
+  const response = /** @type {?Object} */ (JSON.parse(fragmentParam));
   if (!response || response['requestId'] != requestId) {
     return null;
   }
@@ -1404,6 +1592,7 @@ class ActivityWindowRedirectPort {
 
 
 
+
 /**
  * The page-level activities manager ports. This class is intended to be used
  * as a singleton. It can start activities of all modes: iframe, popup, and
@@ -1416,7 +1605,7 @@ class ActivityPorts {
    */
   constructor(win) {
     /** @const {string} */
-    this.version = '1.12';
+    this.version = '1.23';
 
     /** @private @const {!Window} */
     this.win_ = win;
@@ -1434,6 +1623,14 @@ class ActivityPorts {
      * @private @const {!Object<string, !ActivityPort>}
      */
     this.resultBuffer_ = {};
+
+    /** @private {?function(!Error)} */
+    this.redirectErrorResolver_ = null;
+
+    /** @private {!Promise<!Error>} */
+    this.redirectErrorPromise_ = new Promise(resolve => {
+      this.redirectErrorResolver_ = resolve;
+    });
   }
 
   /**
@@ -1474,14 +1671,26 @@ class ActivityPorts {
    * @return {{targetWin: ?Window}}
    */
   open(requestId, url, target, opt_args, opt_options) {
-    const port = new ActivityWindowPort(
-        this.win_, requestId, url, target, opt_args, opt_options);
-    port.open().then(() => {
-      // Await result if possible. Notice that when falling back to "redirect",
-      // the result will never arrive through this port.
-      this.consumeResultAll_(requestId, port);
-    });
+    const port = this.openWin_(requestId, url, target, opt_args, opt_options);
     return {targetWin: port.getTargetWin()};
+  }
+
+  /**
+   * Start an activity in a separate window and tries to setup messaging with
+   * this window.
+   *
+   * See `open()` method for more details, including `onResult` callback.
+   *
+   * @param {string} requestId
+   * @param {string} url
+   * @param {string} target
+   * @param {?Object=} opt_args
+   * @param {?ActivityOpenOptions=} opt_options
+   * @return {!Promise<!ActivityMessagingPort>}
+   */
+  openWithMessaging(requestId, url, target, opt_args, opt_options) {
+    const port = this.openWin_(requestId, url, target, opt_args, opt_options);
+    return port.whenConnected().then(() => port);
   }
 
   /**
@@ -1531,6 +1740,32 @@ class ActivityPorts {
   }
 
   /**
+   * @param {function(!Error)} handler
+   */
+  onRedirectError(handler) {
+    this.redirectErrorPromise_.then(handler);
+  }
+
+  /**
+   * @param {string} requestId
+   * @param {string} url
+   * @param {string} target
+   * @param {?Object=} opt_args
+   * @param {?ActivityOpenOptions=} opt_options
+   * @return {!ActivityWindowPort}
+   */
+  openWin_(requestId, url, target, opt_args, opt_options) {
+    const port = new ActivityWindowPort(
+        this.win_, requestId, url, target, opt_args, opt_options);
+    port.open().then(() => {
+      // Await result if possible. Notice that when falling back to "redirect",
+      // the result will never arrive through this port.
+      this.consumeResultAll_(requestId, port);
+    });
+    return port;
+  }
+
+  /**
    * @param {string} requestId
    * @return {?ActivityPort}
    * @private
@@ -1538,8 +1773,13 @@ class ActivityPorts {
   discoverResult_(requestId) {
     let port = this.resultBuffer_[requestId];
     if (!port && this.fragment_) {
-      port = discoverRedirectPort(
-          this.win_, this.fragment_, requestId);
+      try {
+        port = discoverRedirectPort(
+            this.win_, this.fragment_, requestId);
+      } catch (e) {
+        throwAsync(e);
+        this.redirectErrorResolver_(e);
+      }
       if (port) {
         this.resultBuffer_[requestId] = port;
       }
@@ -1581,10 +1821,14 @@ class ActivityPorts {
 export {
   ActivityPorts,
   ActivityIframePort,
+  ActivityMessagingPort,
   ActivityMode,
   ActivityOpenOptions,
   ActivityPort,
+  ActivityRequest,
   ActivityResult,
   ActivityResultCode,
   ActivityWindowPort,
+  createAbortError,
+  isAbortError,
 };

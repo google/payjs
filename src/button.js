@@ -16,38 +16,80 @@
  */
 
 import {Constants} from './constants.js';
+import {hashStringTo32BitInt, logDevErrorToConsole} from './utils.js';
 import {injectStyleSheet} from './element_injector.js';
 
+/**
+ * The list of roots that have the common button CSS injected.
+ * For example this list could be like [document, root1, root2]. This is to
+ * prevent adding redundant css to each root.
+ * @type {!Array<!ShadowRoot|!HTMLDocument>}
+ */
+let rootsWithInjectedStylesheet = [];
+/**
+ * The list of prop-specific button CSS injected for each root.
+ * For example: [['buy_en', 'pay_zh'], ['donate_en']]. The order corresponds
+ * to the rootsWithInjectedStylesheet, e.g. [document, root1, root2].
+ * It means that for document, CSS of 'buy_en' and 'pay_zh' have been injected,
+ * and for root1, button CSS of 'donate_en' have been injected.
+ * @type {!Array<!Array<string>>}
+ */
+let injectedButtonPropsForEachRoot = [];
+/**
+ * @type {!Array<!ShadowRoot|!HTMLDocument>}
+ * @private
+ */
+let injectedDynamicButtonStylesheetList_ = [];
 /** @private */
-let hasStylesheetBeenInjected_ = false;
+let windowLocationHostname_ = window.location.hostname;
+/**
+ * @type {!Array}
+ * @private
+ */
+let whitelistedDomainsHashedValueListForGpayButtonWithCardInfo_ =
+    window['whitelistedDomainsHashedValueListForGpayButtonWithCardInfo'] || [];
+/**
+ * @type {!Array<number>}
+ * @private
+ */
+let denylistedDomainsHashedValueListForGpayButtonWithCardInfo_ =
+    window['denylistedDomainsHashedValueListForGpayButtonWithCardInfo'] || [];
+
+/**
+ * @type {!Array<number>}
+ * @private
+ */
+let denylistedMerchentIdsHashedValueListForGpayButtonWithCardInfo_ =
+    window['denylistedMerchentIdsHashedValueListForGpayButtonWithCardInfo'] ||
+    [];
 
 /**
  * Return a <div> element containing a Google Pay payment button.
  *
  * @param {ButtonOptions=} options
+ * @param {string=} merchantId
  * @return {!Element}
  */
-function createButtonHelper(options = {}) {
-  if (null) {
-    const button = createButtonWithCardInfo();
-    if (options.onClick) {
-      button.addEventListener('click', options.onClick);
-    }
-    return button;
-  }
-
-  if (!hasStylesheetBeenInjected_) {
-    injectStyleSheet(Constants.BUTTON_STYLE);
-    injectStyleSheet(getLongGPayButtonCss_());
-    hasStylesheetBeenInjected_ = true;
-  }
-  const button = document.createElement('button');
+function createButtonHelper(options = {}, merchantId) {
   if (!Object.values(Constants.ButtonType).includes(options.buttonType)) {
     options.buttonType = Constants.ButtonType.LONG;
   }
-  if (!Object.values(Constants.ButtonColor).includes(options.buttonColor)) {
-    options.buttonColor = Constants.ButtonColor.DEFAULT;
+  if (!Object.values(Constants.ButtonSizeMode)
+           .includes(options.buttonSizeMode)) {
+    options.buttonSizeMode = Constants.ButtonSizeMode.STATIC;
   }
+  if (!Object.values(Constants.ButtonColor).includes(options.buttonColor) ||
+      null) {
+    options.buttonColor = Constants.ButtonColor.BLACK;
+  }
+  if (shouldRenderGPayButtonWithCardInfo_(options, merchantId)) {
+    return createButtonWithCardInfo(options);
+  }
+  injectButtonStyleSheet(options);
+  const button = document.createElement('button');
+  addAttributesToButtonForAccessbility(button);
+
+  // Defaulting the DEFAULT color as BLACK for static buttons.
   if (options.buttonColor == Constants.ButtonColor.DEFAULT) {
     options.buttonColor = Constants.ButtonColor.BLACK;
   }
@@ -61,24 +103,19 @@ function createButtonHelper(options = {}) {
   } else {
     throw new Error('Parameter \'onClick\' must be set.');
   }
-  const div = document.createElement('div');
-  div.appendChild(button);
 
-  if (options.hasOffers) {
+  const div = document.createElement('div');
+  if (options.buttonSizeMode === Constants.ButtonSizeMode.FILL) {
     if (null) {
-      button.setAttribute(
-          'style', Constants.GPAY_BUTTON_WITH_OFFER_ICON_ADDITIONAL_STYLE);
-      addOfferDescription(button, options);
-    } else if (null) {
-      addOfferIcon(button);
-    } else if (google.payments.api
-                   .OffersButtonWithPercentSignAndOffersAvailableText) {
-      button.setAttribute(
-          'style', Constants.GPAY_BUTTON_WITH_OFFER_ICON_ADDITIONAL_STYLE);
-      addOfferIcon(button);
-      addOfferDescription(button, options);
+      div.setAttribute(
+          'class',
+          `${Constants.GPAY_BUTTON_CLASS}-${
+              Constants.NEW_BUTTON_FILL_STYLE_CLASS}`);
+    } else {
+      div.setAttribute('class', `${Constants.GPAY_BUTTON_CLASS}-fill`);
     }
   }
+  div.appendChild(button);
 
   return div;
 }
@@ -87,104 +124,146 @@ function createButtonHelper(options = {}) {
  * Return a <div> element containing a Google Pay payment button with the user's
  * card information (last 4 digits of card number and card network).
  *
+ * @param {!ButtonOptions} options
  * @return {!Element}
  * @private
  */
-function createButtonWithCardInfo() {
-  if (!hasStylesheetBeenInjected_) {
-    injectStyleSheet(Constants.GPAY_BUTTON_CARD_INFO_BUTTON_STYLE);
-    hasStylesheetBeenInjected_ = true;
+function createButtonWithCardInfo(options) {
+  if (!injectedDynamicButtonStylesheetList_.includes(
+          options.buttonRootNode || document)) {
+    injectStyleSheet(
+        Constants.GPAY_BUTTON_CARD_INFO_BUTTON_STYLE, options.buttonRootNode);
+    injectStyleSheet(
+        Constants.GPAY_BUTTON_CARD_INFO_ANIMATION_STYLE,
+        options.buttonRootNode);
+    injectedDynamicButtonStylesheetList_.push(
+        options.buttonRootNode || document);
   }
-  const button = document.createElement('button');
-  button.setAttribute('class', Constants.GPAY_BUTTON_CARD_INFO_CLASS);
-  button.setAttribute('style', Constants.GPAY_BUTTON_WITH_CARD_INFO_IMAGE);
-  addButtonEventListenersForStyling(button);
-  const div = document.createElement('div');
-  div.appendChild(button);
-  return div;
-}
+  const classForGpayButton = getClassForGpayButton_(options);
+  const buttonContainer = document.createElement('button');
+  addAttributesToButtonForAccessbility(buttonContainer);
+  // Adding the vanilla GPay button class to fix the top margin issue only for
+  // www.jockey.com (b/129006185)
+  const buttonContainerClass =
+      `${
+          hashStringTo32BitInt(windowLocationHostname_) === -1658203989 ?
+              Constants.GPAY_BUTTON_CLASS :
+              ''} ` +
+      `${Constants.GPAY_BUTTON_CARD_INFO_CONTAINER_CLASS} ${
+          classForGpayButton}`;
+  buttonContainer.setAttribute('class', buttonContainerClass);
 
-/**
- * Add the offer icon to the top corner of the Google Pay Button.
- *
- * @param {!Element} button
- * @private
- */
-function addOfferIcon(button) {
-  // TODO: Update offer button creation logic to use gStatic link
-  // instead of the raw SVG text
-  const svgText =
-      "<svg width='20px' height='20px' viewBox='0 0 20 20' " +
-      "version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink=" +
-      "'http://www.w3.org/1999/xlink'><defs><path d='M19.41,9.58 L10.41,0.58 " +
-      "C10.05,0.22 9.55,0 9,0 L2,0 C0.9,0 0,0.9 0,2 L0,9 C0,9.55 0.22,10.05 " +
-      "0.59,10.42 L9.59,19.42 C9.95,19.78 10.45,20 11,20 C11.55,20 12.05,19.78 " +
-      "12.41,19.41 L19.41,12.41 C19.78,12.05 20,11.55 20,11 C20,10.45 19.77," +
-      "9.94 19.41,9.58 Z' id='path-1'></path></defs><g id='buttons_10.05'" +
-      " stroke='none' stroke-width='1' fill='none' fill-rule='evenodd'>" +
-      "<g id='Artboard' transform='translate(-40.000000, -43.000000)'>" +
-      "<g id='Group-3' transform='translate(40.000000, 43.000000)'>" +
-      "<g id='Group-2-Copy-2'><g id='Group-Copy'><g id='ic_loyalty_24px'>" +
-      "<mask id='mask-2' fill='white'><use xlink:href='#path-1'></use>" +
-      "</mask><use id='gpay-Shape' fill='#FF6100' fill-rule='nonzero' " +
-      "xlink:href='#path-1'></use><path d='M3.5,5 C2.67,5 2,4.33 2,3.5 C2," +
-      "2.67 2.67,2 3.5,2 C4.33,2 5,2.67 5,3.5 C5,4.33 4.33,5 3.5,5 Z' " +
-      "id='Path' fill='#FFFFFF' fill-rule='nonzero' mask='url(#mask-2)'>" +
-      "</path></g></g></g><g id='Group-13-Copy-7' transform='translate" +
-      "(6.000000, 6.000000)' fill='#FFFFFF' fill-rule='nonzero'>" +
-      "<g id='Group-13-Copy-2'><path d='M2.15217391,4.55172414 C0.963561082," +
-      "4.55172414 1.99840144e-14,3.53278598 1.99840144e-14,2.27586207 " +
-      "C1.99840144e-14,1.01893816 0.963561082,6.30606678e-14 2.15217391,6." +
-      "30606678e-14 C3.34078674,6.30606678e-14 4.30434783,1.01893816 4.30434783," +
-      "2.27586207 C4.30434783,3.53278598 3.34078674,4.55172414 2.15217391," +
-      "4.55172414 Z M2.15217391,3.31034483 C2.69245247,3.31034483 3.13043478,2." +
-      "84719112 3.13043478,2.27586207 C3.13043478,1.70453302 2.69245247," +
-      "1.24137931 2.15217391,1.24137931 C1.61189535,1.24137931 1.17391304,1" +
-      ".70453302 1.17391304,2.27586207 C1.17391304,2.84719112 1.61189535,3." +
-      "31034483 2.15217391,3.31034483 Z' id='Combined-Shape'></path>" +
-      "<path d='M6.84782609,9 C5.65921326,9 4.69565217,7.98106184 4.69565217," +
-      "6.72413793 C4.69565217,5.46721402 5.65921326,4.44827586 6.84782609," +
-      "4.44827586 C8.03643892,4.44827586 9,5.46721402 9,6.72413793 C9,7.98106184" +
-      " 8.03643892,9 6.84782609,9 Z M6.84782609,7.75862069 C7.38810465," +
-      "7.75862069 7.82608696,7.29546698 7.82608696,6.72413793 C7.82608696" +
-      ",6.15280888 7.38810465,5.68965517 6.84782609,5.68965517 C6.30754753," +
-      "5.68965517 5.86956522,6.15280888 5.86956522,6.72413793 C5.86956522," +
-      "7.29546698 6.30754753,7.75862069 6.84782609,7.75862069 Z' " +
-      "id='Combined-Shape'></path><polygon id='Rectangle' " +
-      "transform='translate(4.497720, 4.541938) rotate(34.000000) " +
-      "translate(-4.497720, -4.541938) ' points='3.77901778 -0.202295978 " +
-      "4.9740273 -0.171019161 5.21642263 9.28617278 4.02141311 9.25489596'>" +
-      "</polygon></g></g></g></g></g></svg>";
-  const svgIcon = dom.constHtmlToNode(Const.from(svgText));
-  svgIcon.setAttribute('class', Constants.GPAY_OFFER_ICON_CLASS);
-  button.appendChild(svgIcon);
-  injectStyleSheet(Constants.GPAY_OFFER_ICON_STYLE);
-}
+  // Create the animation container element that contains both progress bar and
+  // placeholder. For more detail on design, visit go/gpay-button-with-card-info
+  const animationContainer = document.createElement('div');
+  const animationContainerClass =
+      shouldUseNewGraphicalAssetsForGpayButton(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_DARK_ANIMATION_CONTAINER_CLASS :
+      isWhiteColor(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_OLD_LIGHT_ANIMATION_CONTAINER_CLASS :
+      Constants.GPAY_BUTTON_CARD_INFO_OLD_DARK_ANIMATION_CONTAINER_CLASS;
 
-/**
- * Add the offer description under the Google Pay button.
- *
- * @param {!Element} button
- * @param {!ButtonOptions} options
- * @private
- */
-function addOfferDescription(button, options) {
-  const pTag = document.createElement('p');
-  pTag.textContent = 'Offer available';
-  button.parentNode.appendChild(pTag);
-  if (options.buttonType === Constants.ButtonType.SHORT) {
-    pTag.setAttribute(
-        'class', `${Constants.GPAY_OFFER_DESCRIPTION_CLASS} short`);
+  animationContainer.setAttribute('class', animationContainerClass);
+
+  // Create the placeholder that will appear before/while the iframe containing
+  // the image with the user's card information. The placeholder consists of
+  // the GPay logo, vertical bar, generic card icon, and the text "****".
+  const placeholderContainer = document.createElement('div');
+  placeholderContainer.setAttribute(
+      'class', Constants.GPAY_BUTTON_CARD_INFO_PLACEHOLDER_CONTAINER_CLASS);
+  const gpayLogo = document.createElement('div');
+  const gpayLogoClass = shouldUseNewGraphicalAssetsForGpayButton(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_ANIMATION_DARK_GPAY_LOGO_CLASS :
+      isWhiteColor(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_ANIMATION_OLD_LIGHT_GPAY_LOGO_CLASS :
+      Constants.GPAY_BUTTON_CARD_INFO_ANIMATION_OLD_DARK_GPAY_LOGO_CLASS;
+  gpayLogo.setAttribute('class', gpayLogoClass);
+  // Create SVG element that contains vertical bar, generic card icon, and
+  // the text "****".
+  const placeholderSvgHtml = isWhiteColor(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_PLACEHOLDER_WHITE :
+      (shouldUseNewGraphicalAssetsForGpayButton(options) ?
+           Constants.GPAY_BUTTON_CARD_INFO_PLACEHOLDER_NEW_BLACK :
+           Constants.GPAY_BUTTON_CARD_INFO_PLACEHOLDER_BLACK);
+  const placeholderSvg = dom.constHtmlToNode(placeholderSvgHtml);
+
+  // Create elements needed for the progress bar animation that will continue
+  // until the iframe that contains the GPay button with card info image loads.
+  const progressBarContainer = document.createElement('div');
+  progressBarContainer.setAttribute(
+      'class', Constants.GPAY_BUTTON_CARD_INFO_PROGRESS_BAR_CONTAINER_CLASS);
+  const progressBar = document.createElement('div');
+  const progressBarClass = shouldUseNewGraphicalAssetsForGpayButton(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_PROGRESS_BAR_CLASS :
+      Constants.GPAY_BUTTON_CARD_INFO_PROGRESS_BAR_OLD_CLASS;
+  progressBar.setAttribute('class', progressBarClass);
+  const progressBarIndicator = document.createElement('div');
+  const progressBarIndicatorClass =
+      shouldUseNewGraphicalAssetsForGpayButton(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_PROGRESS_BAR_INDICATOR_CLASS :
+      Constants.GPAY_BUTTON_CARD_INFO_PROGRESS_BAR_INDICATOR_OLD_CLASS;
+  progressBarIndicator.setAttribute('class', progressBarIndicatorClass);
+
+  progressBar.appendChild(progressBarIndicator);
+  placeholderContainer.appendChild(gpayLogo);
+  if (options.buttonSizeMode !== Constants.ButtonSizeMode.FILL) {
+    placeholderContainer.appendChild(placeholderSvg);
   } else {
-    pTag.setAttribute(
-        'class', `${Constants.GPAY_OFFER_DESCRIPTION_CLASS} long`);
+    const placeholderSvgHtmlFill = isWhiteColor(options) ?
+        Constants.GPAY_BUTTON_CARD_INFO_PLACEHOLDER_WHITE_FILL :
+        Constants.GPAY_BUTTON_CARD_INFO_PLACEHOLDER_BLACK_FILL;
+    const placeholderSvgFill = dom.constHtmlToNode(placeholderSvgHtmlFill);
+    const placeholderSvgContainer = document.createElement('div');
+    placeholderSvgContainer.appendChild(placeholderSvgFill);
+    placeholderSvgContainer.setAttribute(
+        'class', Constants.GPAY_BUTTON_PLACEHOLDER_SVG_CONTAINER_CLASS);
+    placeholderContainer.appendChild(placeholderSvgContainer);
   }
-  ['mouseover', 'mouseout'].map(function(e) {
-    button.addEventListener(e, /** @this {!Element}*/ function(e) {
-      pTag.classList.toggle('gpay-btn-clicked', e.type == 'mouseover');
-    });
-  });
-  injectStyleSheet(Constants.GPAY_OFFER_DESCRIPTION_STYLE);
+  progressBarContainer.appendChild(progressBar);
+  animationContainer.appendChild(placeholderContainer);
+  animationContainer.appendChild(progressBarContainer);
+  addButtonEventListenersForStyling(animationContainer);
+  buttonContainer.appendChild(animationContainer);
+
+  const buttonImageIframe =
+      /** @type {!HTMLIFrameElement} */ (document.createElement('iframe'));
+  buttonImageIframe.setAttribute(
+      'class', Constants.GPAY_BUTTON_CARD_INFO_IFRAME_CLASS);
+  buttonImageIframe.setAttribute('scrolling', 'no');
+  const uri = new Uri(Constants.GPAY_BUTTON_WITH_CARD_INFO_IMAGE_SRC);
+  uri.setParameterValue('buttonColor', options.buttonColor);
+  uri.setParameterValue('browserLocale', getLocale_(options.buttonLocale));
+  uri.setParameterValue('buttonSizeMode', options.buttonSizeMode);
+  uri.setParameterValue(
+      'enableGpayNewButtonAsset',
+      null || false);
+  if (options.allowedPaymentMethods !== undefined) {
+    uri.setParameterValue(
+        'allowedPaymentMethods', JSON.stringify(options.allowedPaymentMethods));
+  }
+  buttonImageIframe.src = uri.toString();
+  buttonImageIframe.onload = () => {
+    buttonImageIframe.classList.add(
+        Constants.GPAY_BUTTON_CARD_INFO_IFRAME_FADE_IN_CLASS);
+    animationContainer.classList.add(
+        Constants.GPAY_BUTTON_CARD_INFO_ANIMATION_CONTAINER_FADE_OUT_CLASS);
+  };
+  if (options.onClick) {
+    buttonContainer.addEventListener('click', options.onClick);
+  }
+  addButtonEventListenersForStyling(buttonContainer);
+  buttonContainer.appendChild(buttonImageIframe);
+
+  const buttonWrapper = document.createElement('div');
+  const buttonWrapperClass = shouldUseNewGraphicalAssetsForGpayButton(options) ?
+      Constants.GPAY_BUTTON_CARD_INFO_CONTAINER_FILL_CLASS :
+      Constants.GPAY_BUTTON_CARD_INFO_CONTAINER_OLD_FILL_CLASS;
+  if (options.buttonSizeMode === Constants.ButtonSizeMode.FILL) {
+    buttonWrapper.setAttribute('class', buttonWrapperClass);
+  }
+  buttonWrapper.appendChild(buttonContainer);
+
+  return buttonWrapper;
 }
 
 /**
@@ -203,9 +282,12 @@ function addButtonEventListenersForStyling(button) {
       // when the initial event takes place (i.e: mouseover, mousedown, focus),
       // and otherwise we remove it.
       button.classList.toggle('hover', e.type == 'mouseover');
-      const icon = document.getElementById('gpay-Shape');
-      if (icon !== null) {
-        icon.classList.toggle('hover', e.type == 'mouseover');
+
+      const gpayButtonCardInfoAnimationContainer = document.querySelector(
+          `.${Constants.GPAY_BUTTON_CARD_INFO_ANIMATION_CONTAINER_CLASS}`);
+      if (gpayButtonCardInfoAnimationContainer !== null) {
+        gpayButtonCardInfoAnimationContainer.classList.toggle(
+            'hover', e.type == 'mouseover');
       }
     });
   });
@@ -226,6 +308,54 @@ function addButtonEventListenersForStyling(button) {
 }
 
 /**
+ * Adds attributes 'type', 'title', and 'aria-labelledby' to the GPay button
+ * element for the accessibility.
+ *
+ * @param {!Element} button
+ * @private
+ */
+function addAttributesToButtonForAccessbility(button) {
+  button.setAttribute(
+      Constants.GpayButtonAttribute.TYPE, Constants.GPAY_BUTTON_TYPE);
+  button.setAttribute(
+      Constants.GpayButtonAttribute.ARIA_LABEL, Constants.GPAY_BUTTON_LABEL);
+}
+
+/**
+ * Inject the style sheet to the shadowroot or document according to options.
+ * This adds BUTTON_STYLE to each rootnode only once, and adds prop-specific
+ * style sheet for each (root, prop) pair only once.
+ *
+ * @param {!ButtonOptions} options
+ */
+function injectButtonStyleSheet(options) {
+  const locale = getLocale_(options.buttonLocale, true);
+  const currentRoot = options.buttonRootNode || document;
+  // If current root does not have any css injected, inject the common button
+  // css to this root first. Then add an empty array to the injected prop list
+  // for this root, as no prop-specific css has been injected to this root yet.
+  if (!rootsWithInjectedStylesheet.includes(currentRoot)) {
+    injectStyleSheet(Constants.BUTTON_STYLE, currentRoot);
+    injectStyleSheet(Constants.GPAY_BUTTON_NEW_STYLE, currentRoot);
+    rootsWithInjectedStylesheet.push(currentRoot);
+    injectedButtonPropsForEachRoot.push([]);
+  }
+  const currentRootIndex = rootsWithInjectedStylesheet.indexOf(currentRoot);
+  // If current root does not have this locale's css injected, inject the
+  // prop-specific button style sheet to this root.
+  const color = isWhiteColor(options) ? Constants.ButtonColor.WHITE :
+                                        Constants.ButtonColor.BLACK;
+  const prop = locale + '_' + options.buttonType + '_' + color;
+  if (!isButtonTypeShortOrNull(options.buttonType)) {
+    if (!injectedButtonPropsForEachRoot[currentRootIndex].includes(prop)) {
+      injectStyleSheet(
+          getGPayButtonCss(locale, options.buttonType, color), currentRoot);
+      injectedButtonPropsForEachRoot[currentRootIndex].push(prop);
+    }
+  }
+}
+
+/**
  * Gets the class for the Google Pay button.
  *
  * @param {!ButtonOptions} options
@@ -233,58 +363,73 @@ function addButtonEventListenersForStyling(button) {
  * @private
  */
 function getClassForGpayButton_(options) {
-  if (options.buttonType == Constants.ButtonType.LONG) {
-    if (options.buttonColor == Constants.ButtonColor.WHITE) {
-      return 'white long';
-    } else {
-      return 'black long';
-    }
-  } else if (options.buttonType == Constants.ButtonType.SHORT) {
-    if (options.buttonColor == Constants.ButtonColor.WHITE) {
-      return 'white short';
-    } else {
-      return 'black short';
-    }
+  let color = Constants.ButtonColor.WHITE;
+  if (!isWhiteColor(options)) {
+    color = Constants.ButtonColor.BLACK;
   }
-  return 'black long';
+
+  let type = options.buttonType || `${Constants.ButtonType.BUY}`;
+
+  // For CSS selector backwards compatibility
+  if (options.buttonType === Constants.ButtonType.BUY) {
+    type = `${Constants.ButtonType.BUY} ${Constants.ButtonType.LONG}`;
+  } else if (options.buttonType === Constants.ButtonType.PLAIN) {
+    type = `${Constants.ButtonType.PLAIN} ${Constants.ButtonType.SHORT}`;
+  }
+
+  if (!isWhiteColor(options) && null) {
+    return `${color} ${type} ${Constants.NEW_BUTTON_STYLE_CLASS} ${
+        getLocale_(options.buttonLocale)}`;
+  }
+  return `${color} ${type} ${getLocale_(options.buttonLocale)}`;
 }
 
 /**
- * Gets the CSS for the long gpay button depending on the locale.
+ * Gets the CSS for the gpay button depending on the locale, the type and
+ * the color.
  *
+ * @param {string} locale
+ * @param {string|null|undefined} buttonType
+ * @param {string|null|undefined} buttonColor
  * @return {string}
- * @private
  */
-function getLongGPayButtonCss_() {
-  // navigator.userLanguage is used for IE
-  const defaultLocale = 'en';
-  let locale = navigator.language ||
-      /** @type {string} */ (navigator.userLanguage) || defaultLocale;
-  if (locale != defaultLocale) {
-    // Get language part of locale (e.g: fr-FR is fr) and check if it is
-    // supported, otherwise default to en
-    locale = locale.substring(0, 2);
-    if (!Constants.BUTTON_LOCALE_TO_MIN_WIDTH[locale]) {
-      locale = defaultLocale;
-    }
+function getGPayButtonCss(locale, buttonType, buttonColor) {
+  const buttonAttributes = getButtonAttributesByDesign(buttonColor);
+  const cssStyleColorClass =
+      buttonColor === Constants.ButtonColor.WHITE ? 'light' : 'dark';
+  let minWidth = '';
+  minWidth = buttonType === Constants.ButtonType.LONG ?
+      buttonAttributes.minWidths[Constants.ButtonType.BUY][locale] :
+      buttonAttributes
+          .minWidths[buttonType || Constants.ButtonType.BUY][locale];
+  if (buttonType == Constants.ButtonType.LONG ||
+      buttonType == Constants.ButtonType.BUY) {
+    return `
+    .${Constants.GPAY_BUTTON_CLASS}.${buttonColor}.long.${locale}, .${
+        Constants.GPAY_BUTTON_CLASS}.${buttonColor}.buy.${locale} {
+      background-image: url(${buttonAttributes.assetUrlPath}/${
+        cssStyleColorClass}/${locale}.svg);
+        min-width: ${minWidth}px;
+      }`;
   }
-  const minWidth = Constants.BUTTON_LOCALE_TO_MIN_WIDTH[locale];
 
   return `
-    .${Constants.GPAY_BUTTON_CLASS}.long {
+    .${Constants.GPAY_BUTTON_CLASS}.${buttonColor}.${buttonType}.${locale} {
+      background-image: url(${buttonAttributes.assetUrlPath}/${
+      cssStyleColorClass}/${buttonType}/${locale}.svg);
       min-width: ${minWidth}px;
-      width: 240px;
     }
+  `;
+}
 
-    .${Constants.GPAY_BUTTON_CLASS}.white.long {
-      background-image: url(https://www.gstatic.com/instantbuy/svg/light/${
-      locale}.svg);
-    }
-
-    .${Constants.GPAY_BUTTON_CLASS}.black.long {
-      background-image: url(https://www.gstatic.com/instantbuy/svg/dark/${
-      locale}.svg);
-    }`;
+/**
+ * Returns true if the button type is short or null
+ * @param {string|null|undefined} buttonType
+ * @return {boolean}
+ */
+function isButtonTypeShortOrNull(buttonType) {
+  return !buttonType || buttonType == Constants.ButtonType.SHORT ||
+      buttonType == Constants.ButtonType.PLAIN;
 }
 
 /**
@@ -294,16 +439,170 @@ function getLongGPayButtonCss_() {
  * @return {boolean} True if the white color is selected.
  * @private
  */
-function isWhiteColor_(options) {
+function isWhiteColor(options) {
   return options.buttonColor == Constants.ButtonColor.WHITE;
+}
+
+/**
+ * Returns the specified button locale or user's browser locale for GPay button.
+ *
+ * @param {?string|undefined} buttonLocale
+ * @param {boolean=} shouldLogDevError True if should log dev error. This
+ *     avoids logging errors repeatedly.
+ * @return {string} The specified button locale or user's browser locale.
+ * @private
+ */
+function getLocale_(buttonLocale, shouldLogDevError = false) {
+  const defaultLanguage = 'en';
+  const browserLanguage = navigator.language != null ?
+      navigator.language.substring(
+          Constants.BROWSER_LOCALE_START, Constants.BROWSER_LOCALE_END) :
+      defaultLanguage;
+  const locale = buttonLocale || browserLanguage || defaultLanguage;
+  const language = locale.substring(
+      Constants.BROWSER_LOCALE_START, Constants.BROWSER_LOCALE_END);
+  const minWidth = null ?
+      Constants.NEW_BUTTON_MIN_WIDTH :
+      Constants.BUTTON_MIN_WIDTH;
+  if (language in minWidth[Constants.ButtonType.BUY]) {
+    return language;
+  }
+
+  if (language !== browserLanguage && shouldLogDevError) {
+    logDevErrorToConsole({
+      apiName: 'createButton',
+      errorMessage: `Button locale "${
+          buttonLocale}" is not supported, falling back to browser locale.`,
+    });
+  }
+
+  if (browserLanguage in minWidth[Constants.ButtonType.BUY]) {
+    return browserLanguage;
+  }
+
+  return defaultLanguage;
+}
+
+/**
+ * Get button attributes based on the old/new design
+ *
+ * @param {string|null|undefined} buttonColor
+ * @return {{assetUrlPath: string, minWidths: !Constants.ButtonMinWidths}}
+ */
+function getButtonAttributesByDesign(buttonColor) {
+  if (buttonColor === Constants.ButtonColor.WHITE ||
+      !null) {
+    return {
+      assetUrlPath: 'https://www.gstatic.com/instantbuy/svg',
+      minWidths: Constants.BUTTON_MIN_WIDTH,
+    };
+  }
+
+  return {
+    assetUrlPath:
+        'https://www.gstatic.com/instantbuy/svg/refreshedgraphicaldesign',
+    minWidths: Constants.NEW_BUTTON_MIN_WIDTH,
+  };
+}
+
+/**
+ * Returns true if should render GPay button with card info.
+ * GPay button with card info should be rendered if one of following
+ * conditions is met:
+ *  1. The user is whitelisted for testing (regardless of domain or
+ *     button type), AND ths user must be on the merchant domain or
+ *     owned by a merchant that is NOT in the denylist AND
+ *     uses the LONG type button.
+ *  2. The experiment is enabled for the user, and the user is on the
+ *     merchant website that uses the LONG type button.
+ *  3. The user is on the whitelisted merchant website that uses the LONG type
+ *     button.
+ *
+ *  Note that the denylist will override allowlist.
+ *
+ * @param {!ButtonOptions} options
+ * @param {string=} merchantId
+ * @return {boolean} True if should render GPay button with card info.
+ * @private
+ */
+function shouldRenderGPayButtonWithCardInfo_(options, merchantId) {
+  const isMerchantIdDenylisted = merchantId &&
+      denylistedMerchentIdsHashedValueListForGpayButtonWithCardInfo_.includes(
+          hashStringTo32BitInt(merchantId));
+  const isMertchantDomainWhitelisted =
+      whitelistedDomainsHashedValueListForGpayButtonWithCardInfo_.includes(
+          hashStringTo32BitInt(windowLocationHostname_));
+  const isMerchantDomainInDenylisted =
+      denylistedDomainsHashedValueListForGpayButtonWithCardInfo_.includes(
+          hashStringTo32BitInt(windowLocationHostname_));
+  return (nullForTesting ||
+          null ||
+          isMertchantDomainWhitelisted) &&
+      !isMerchantIdDenylisted && !isMerchantDomainInDenylisted &&
+      (options.buttonType === Constants.ButtonType.LONG ||
+       options.buttonType === Constants.ButtonType.BUY);
+}
+
+/**
+ * Returns true if experiment flag for new asset is turned on and the button
+ * color is dark.
+ * @param {!ButtonOptions} options
+ * @return {boolean} True if new asset experiment flag is turned on and the
+ *     button color is dark.
+ */
+function shouldUseNewGraphicalAssetsForGpayButton(options) {
+  return null && !isWhiteColor(options);
+}
+/**
+ * Visible for testing.
+ *
+ * @return {string} Returns the image extension that should be used.
+ */
+function getImageExtension() {
+  const userAgent = window.navigator.userAgent;
+
+  if (null) {
+    if (userAgent.indexOf('Safari') > 0 &&
+        (userAgent.indexOf('iPhone') > 0 || userAgent.indexOf('iPad') > 0)) {
+      return 'png';
+    }
+  }
+  return 'svg';
 }
 
 /** Visible for testing. */
 function resetButtonStylesheet() {
-  hasStylesheetBeenInjected_ = false;
+  rootsWithInjectedStylesheet = [];
+  injectedDynamicButtonStylesheetList_ = [];
+  injectedButtonPropsForEachRoot = [];
+}
+
+/** Visible for testing. */
+function setWindowLocationHostname(hostname) {
+  windowLocationHostname_ = hostname;
+}
+
+/** Visible for testing. */
+function setWhitelistedDomainsHashedValueList(whitelist) {
+  whitelistedDomainsHashedValueListForGpayButtonWithCardInfo_ = whitelist;
+}
+
+/** Visible for testing. */
+function setDenylistedDomainsHashedValueList(denylist) {
+  denylistedDomainsHashedValueListForGpayButtonWithCardInfo_ = denylist;
+}
+
+/** Visible for testing. */
+function setDenylistedMerchantIdsHashedValueList(denylist) {
+  denylistedMerchentIdsHashedValueListForGpayButtonWithCardInfo_ = denylist;
 }
 
 export {
   createButtonHelper,
-  resetButtonStylesheet
+  resetButtonStylesheet,
+  setWindowLocationHostname,
+  setWhitelistedDomainsHashedValueList,
+  setDenylistedDomainsHashedValueList,
+  setDenylistedMerchantIdsHashedValueList,
+  getImageExtension
 };

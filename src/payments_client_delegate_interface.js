@@ -21,6 +21,15 @@
  */
 class PaymentsClientDelegateInterface {
   /**
+   * Registers callbacks if payment data request includes callback intent.
+   * The callbacks will be executed every time when one of the callback intents
+   * are triggered or by user initialization. This is only supported on web.
+   *
+   * @param {?PaymentDataCallbacks} paymentDataCallbacks
+   */
+  registerPaymentDataCallbacks(paymentDataCallbacks) {}
+
+  /**
    * Check whether the user can make payments using the Payment API.
    *
    * @param {!IsReadyToPayRequest} isReadyToPayRequest
@@ -45,6 +54,7 @@ class PaymentsClientDelegateInterface {
    *
    * @param {!PaymentDataRequest} paymentDataRequest Provides necessary
    *     information to support a payment.
+   * @return {!Promise|undefined}
    */
   loadPaymentData(paymentDataRequest) {}
 

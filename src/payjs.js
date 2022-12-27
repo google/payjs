@@ -16,6 +16,8 @@
  */
 
 import {PaymentsAsyncClient} from './payjs_async.js';
+import {deepMergeInto} from './utils.js';
+
 
 /**
  * The client for interacting with the Google Pay APIs.
@@ -23,15 +25,22 @@ import {PaymentsAsyncClient} from './payjs_async.js';
  */
 class PaymentsClient {
   /**
-   * @param {PaymentOptions=} paymentOptions
+   * @param {!PaymentsClientOptions=} paymentsClientOptions
    * @param {boolean=} opt_useIframe
    */
-  constructor(paymentOptions = {}, opt_useIframe) {
-    this.mergedPaymentOptions_ =
-        Object.assign({}, window['gpayInitParams'], paymentOptions);
+  constructor(paymentsClientOptions = {}, opt_useIframe) {
+    let merchantInfoFromPayJsUrl = window['gpayMerchantIdFromUrl'] ?
+        {'merchantInfo': {'merchantId': window['gpayMerchantIdFromUrl']}} :
+        {};
+
+    this.mergedPaymentsClientOptions_ =
+        /** @type {!PaymentsClientOptions} */ (deepMergeInto(
+            {}, merchantInfoFromPayJsUrl, window['gpayInitParams'],
+            paymentsClientOptions));
+
     /** @private @const {!PaymentsAsyncClient} */
     this.asyncClient_ = new PaymentsAsyncClient(
-        this.mergedPaymentOptions_, this.payComplete_.bind(this),
+        this.mergedPaymentsClientOptions_, this.payComplete_.bind(this),
         opt_useIframe);
 
     /** @private {?function(!Promise<!PaymentData>)} */
@@ -82,7 +91,7 @@ class PaymentsClient {
    * @export
    */
   notifyAvailableOffers(preNotificationOfferDetails) {
-    // TODO: Implement this.
+    return;
   }
 
   /**

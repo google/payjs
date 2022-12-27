@@ -21,21 +21,59 @@
  */
 
 /**
- * Options for using the Payment APIs.
- *
- * @typedef {{
- *   environment: (?string|undefined),
- *   merchantInfo: (?MerchantInfo|undefined),
- *   i: (?InternalParameters|undefined),
- * }}
- *
- * @property {string} environment The environment to use. Current available
- *     environments are PRODUCTION or TEST. If not set, defaults to
- *     environment PRODUCTION.
- * @property {MerchantInfo} merchantInfo
- * @property {InternalParameters} i
+ * @typedef {function(!IntermediatePaymentData) :
+ *     (!PaymentDataRequestUpdate|!Promise<!PaymentDataRequestUpdate>)}
  */
-var PaymentOptions;
+let OnPaymentDataChangedCallback;
+
+/**
+ * @typedef {function(!PaymentData) :
+ * (!PaymentAuthorizationResult|!Promise<!PaymentAuthorizationResult>)}
+ */
+let OnPaymentAuthorizedCallback;
+
+/**
+ * This contains all callbacks in Payment APIs.
+ * @record
+ */
+class PaymentDataCallbacks {
+  constructor() {
+    /** @type {!OnPaymentDataChangedCallback|undefined} */
+    this.onPaymentDataChanged;
+
+    /** @type {!OnPaymentAuthorizedCallback|undefined} */
+    this.onPaymentAuthorized;
+  }
+}
+
+/**
+ * Options for using the Payment APIs.
+ * @record
+ */
+class PaymentsClientOptions {
+  constructor() {
+    /**
+     * The environment to use. Current available environments are PRODUCTION or
+     * TEST. If not set, defaults to environment PRODUCTION.
+     * @type {?string|undefined}
+     */
+    this.environment;
+
+    /** @type {?MerchantInfo|undefined} */
+    this.merchantInfo;
+
+    // TODO: Remove after paymentDataCallbacks is officially rolled
+    // out.
+    /** @type {!OnPaymentDataChangedCallback|undefined} */
+    this.paymentDataCallback;
+
+    /** @type {!PaymentDataCallbacks|undefined} */
+    this.paymentDataCallbacks;
+
+    /** @type {!InternalParameters|undefined} */
+    this.i;
+  }
+}
 
 /**
  * @typedef{{
@@ -46,12 +84,13 @@ var PaymentOptions;
  * @property {string} type The type of allowed payment method.
  * @property {Object} parameters The parameters for the payment type.
  */
-var PaymentMethod;
+let PaymentMethod;
 
 /**
  * Request object of isReadyToPay.
  *
  * @typedef {{
+ *   activityModeRequired: (boolean|undefined),
  *   allowedPaymentMethods: (?Array<string>|?Array<PaymentMethod>|undefined),
  *   apiVersion: (?number|undefined),
  *   apiVersionMinor: (?number|undefined),
@@ -60,6 +99,7 @@ var PaymentMethod;
  *   merchantInfo: (?MerchantInfo|undefined),
  * }}
  *
+ * @property {boolean} activityModeRequired
  * @property {Array<string>} allowedPaymentMethods The allowedPaymentMethods can
  *     be 'CARD' or 'TOKENIZED_CARD'.
  * @property {number} apiVersion.
@@ -68,7 +108,7 @@ var PaymentMethod;
  * @property {boolean} existingPaymentMethodRequired
  * @property {MerchantInfo} merchantInfo
  */
-var IsReadyToPayRequest = {};
+let IsReadyToPayRequest;
 
 
 /**
@@ -78,15 +118,16 @@ var IsReadyToPayRequest = {};
  *   merchantId: (?string|undefined),
  *   allowedPaymentMethods: (?Array<string>|undefined),
  *   apiVersion: (?number|undefined),
- *   paymentMethodTokenizationParameters: (?PaymentMethodTokenizationParameters|undefined),
- *   cardRequirements: (?CardRequirements|undefined),
- *   phoneNumberRequired: (?boolean|undefined),
+ *   paymentMethodTokenizationParameters:
+ * (?PaymentMethodTokenizationParameters|undefined), cardRequirements:
+ * (?CardRequirements|undefined), phoneNumberRequired: (?boolean|undefined),
  *   emailRequired: (?boolean|undefined),
  *   merchantInfo: (?MerchantInfo|undefined),
  *   shippingAddressRequired: (?boolean|undefined),
  *   shippingAddressRequirements: (?ShippingAddressRequirements|undefined),
  *   transactionInfo: (?TransactionInfo|undefined),
  *   swg: (?SwgParameters|undefined),
+ *   callbackIntents: (?Array<string>|undefined),
  *   i: (?InternalParameters|undefined),
  * }}
  *
@@ -104,9 +145,58 @@ var IsReadyToPayRequest = {};
  * @property {ShippingAddressRequirements} shippingAddressRequirements.
  * @property {TransactionInfo} transactionInfo
  * @property {SwgParameters} swg
+ * @property {Array<string>} callbackIntents
  * @property {InternalParameters} i
  */
-var PaymentDataRequest = {};
+let PaymentDataRequest;
+
+
+/**
+ * An updated request for payment data.
+ * @record
+ */
+class PaymentDataRequestUpdate {
+  constructor() {
+    /**
+     * @type {?Object|undefined}
+     */
+    this.newShippingOptionParameters;
+
+    /**
+     * @type {?TransactionInfo|undefined}
+     */
+    this.newTransactionInfo;
+
+    /**
+     * @type {?OfferInfo|undefined}
+     */
+    this.newOfferInfo;
+
+    /**
+     * @type {?PaymentDataError|undefined}
+     */
+    this.error;
+  }
+}
+
+/**
+ * The result of handling payment authorization data.
+ * @record
+ */
+class PaymentAuthorizationResult {
+  constructor() {
+    /**
+     * The value must be either 'SUCCESS' or 'ERROR'.
+     * @type {string}
+     */
+    this.transactionState;
+
+    /**
+     * @type {!PaymentDataError|undefined}
+     */
+    this.error;
+  }
+}
 
 
 /**
@@ -123,7 +213,7 @@ var PaymentDataRequest = {};
  * @property {Object<string>} parameters The payment method tokenization
  *     parameters.
  */
-var PaymentMethodTokenizationParameters;
+let PaymentMethodTokenizationParameters;
 
 
 /**
@@ -144,7 +234,7 @@ var PaymentMethodTokenizationParameters;
  *         MIN - only contain the minimal info, including name, country code,
  *     and postal code. FULL - the full address.
  */
-var CardRequirements;
+let CardRequirements;
 
 
 /**
@@ -157,7 +247,7 @@ var CardRequirements;
  * @property {Array<string>} allowedCountries The countries allowed for shipping
  *     address.
  */
-var ShippingAddressRequirements;
+let ShippingAddressRequirements;
 
 
 /**
@@ -181,7 +271,32 @@ var ShippingAddressRequirements;
  *     either 'DEFAULT' or 'COMPLETE_IMMEDIATE_PURCHASE'
  *
  */
-var TransactionInfo;
+let TransactionInfo;
+
+/**
+ * Offer info.
+ *
+ * @typedef {{
+ *   offers: ?Array<OfferDetail>
+ * }}
+ *
+ * @property {Array<OfferDetail>} offers The offers that are applicable to this
+ *     transaction.
+ */
+let OfferInfo;
+
+/**
+ * Offer detail.
+ *
+ * @typedef {{
+ *   redemptionCode: (?string|undefined),
+ *   description: (?string|undefined),
+ * }}
+ *
+ * @property {string} redemptionCode The redemption code for this offer.
+ * @property {string} description The description of this offer.
+ */
+let OfferDetail;
 
 /**
  * @typedef {{
@@ -189,30 +304,91 @@ var TransactionInfo;
  *   merchantOrigin: (?string|undefined),
  *   merchantName: (?string|undefined),
  *   authJwt: (?string|undefined),
+ *   softwareInfo: (?SoftwareInfo|undefined),
+ *   buttonInfo: (?ButtonInfo|undefined)
  * }}
  */
-var MerchantInfo;
+let MerchantInfo;
 
+/**
+ * @typedef {{
+ *   id: (?string|undefined),
+ *   version: (?string|undefined),
+ * }}
+ */
+let SoftwareInfo;
+
+/**
+ * @typedef {{
+ *   buttonType: number,
+ *   buttonSizeMode: number,
+ *   buttonRootNode: number,
+ * }}
+ */
+let ButtonInfo;
 
 /**
  * Subscribe with Google specific parameters.
+ * TODO: Clean up incoming parameters.
  *
  * @typedef {{
+ *   swgVersion: (?string|undefined),
  *   skuId: string,
+ *   sku: (?string|undefined),
  *   publicationId: string,
+ *   oldSku: (?string|undefined),
+ *   metadata: (?VirtualGiftsMetadata|undefined),
  * }}
  *
- * @property {string} skuId The SkuId that the publisher has setup with Play.
+ * @property {string} swgVersion The version of Subscribe with Google, to
+ *     trigger different buyflows.
+ * @property {string} skuId The ID of the SKU/offer that the publisher has
+ *     setup. Old name. Finish migrating to 'sku'.
+ * @property {string} sku The ID of the SKU/offer that the publisher has setup.
  * @property {string} publicationId The publicationId that the publisher has
- *  setup with play.
+ *  setup.
+ * @property {string} oldSku The ID of the SKU/offer to replace.
+ * @property {?VirtualGiftsMetadata|undefined} metadata Additional metadata.
  */
-var SwgParameters;
+let SwgParameters;
+
+/**
+ * Additional metadata for Virtual Gifts that needs to be passed through the
+ * Subscribe with Google buy flow.
+ *
+ * @typedef {{
+ *   anonymous: boolean,
+ *   contentId: string,
+ *   contentTitle: string,
+ *   customMessage: ?string,
+ *   readerSurface: ?string,
+ *   webSharingPolicy: ?string,
+ *   creatorSharingPolicy: ?string,
+ * }}
+ *
+ * @property {boolean} anonymous Whether the contribution is anonymous.
+ * @property {string} contentId The id of the content receiving a contribution.
+ * @property {string} contentTitle The title of the content receiving a
+ *     contribution.
+ * @property {?string} customMessage A custom private message sent to
+ *     the creator of the content receiving a contribution.
+ * @property {?string} readerSurface The reader surface to distinguish
+ *     contributions from different surfaces containing a CTA to open the buy
+ *     flow, eg. Wordpress, Chrome, Tenor integrations.
+ * @property {?string} webSharingPolicy The policy that dictates how the
+ *     contribution will be displayed on the web.
+ * @property {?string} creatorSharingPolicy The policy that dictates how the
+ *     contribution will be displayed to the Creator.
+ */
+let VirtualGiftsMetadata;
 
 /**
  * Internal parameters.
  *
  * @typedef {{
  *   ampMerchantOrigin: (string|undefined),
+ *   coordinationToken: (string|undefined),
+ *   expandInstrumentSelector: (boolean|undefined),
  *   googleTransactionId: (string|undefined),
  *   startTimeMs: (number|undefined),
  *   preferredAccountId: (string|undefined),
@@ -220,10 +396,15 @@ var SwgParameters;
  *   renderContainerCenter: (boolean|undefined),
  *   redirectVerifier: (string|undefined),
  *   redirectKey: (string|undefined),
+ *   firstPartyMerchantIdentifier: (string|undefined),
  * }}
  *
  * @property {(string|undefined)} ampMerchantOrigin The origin of an amp page.
  *     This field should only be trusted if loaded in Google Viewer.
+ * @property {(string|undefined)} coordinationToken The coordination token
+ *     provided by the AMP viewer to coordinate experiments.
+ * @property {(boolean|undefined)} expandInstrumentSelector Expand the
+ *     instrument selector by default when opening the bottom sheet.
  * @property {(string|undefined)} googleTransactionId The google transaction id
  *     to keep track of the current transaction.
  * @property {(number|undefined)} startTimeMs The unix time for when an API
@@ -239,8 +420,10 @@ var SwgParameters;
  *     only be used for a payment request.
  * @property {(string|undefined)} redirectKey The redirect verifier. Can only
  *     be used for the payment client initialization.
+ * @property {{string|undefined}} firstPartyMerchantIdentifier merchant
+ *     identifier of a first party product.
  */
-var InternalParameters;
+let InternalParameters;
 
 /**
  * Instant buy parameters.
@@ -250,52 +433,12 @@ var InternalParameters;
  *   encryptedParameters: (string|undefined),
  * }}
  *
- * @property {(string|undefined)} clientParameters The buyflow client parameters.
- * @property {(string|undefined)} encryptedParameters The encrypted buyflow client
- *     parameters.
+ * @property {(string|undefined)} clientParameters The buyflow client
+ * parameters.
+ * @property {(string|undefined)} encryptedParameters The encrypted buyflow
+ * client parameters.
  */
-var InstantBuyParameters;
-
-/**
- * PaymentRequest.
- *
- * @constructor
- * @see https://developer.mozilla.org/en-US/docs/Web/API/PaymentRequest/PaymentRequest
- */
-function PaymentRequest(methodData, details) {};
-
-/**
- * @see https://developer.mozilla.org/en-US/docs/Web/API/PaymentRequest/canMakePayment
- * @return {Promise<Boolean>}
- */
-PaymentRequest.prototype.canMakePayment = function() {};
-
-/**
- * @see https://developer.mozilla.org/en-US/docs/Web/API/PaymentRequest/show
- * @return {Promise<!PaymentResponse>}
- */
-PaymentRequest.prototype.show = function() {};
-
-
-/**
- * The response of Payment Request API after a user selects a payment method and
- * approves a payment request.
- *
- * @constructor
- * @see https://developer.mozilla.org/en-US/docs/Web/API/PaymentResponse
- */
-function PaymentResponse() {};
-
-/**
- * @see https://developer.mozilla.org/en-US/docs/Web/API/PaymentResponse/details
- */
-PaymentResponse.prototype.details = {};
-
-/**
- * @param {string} result
- * @see https://developer.mozilla.org/en-US/docs/Web/API/PaymentResponse/complete
- */
-PaymentResponse.prototype.complete = function(result) {};
+let InstantBuyParameters;
 
 /**
  * A configuration object for rendering the button.
@@ -303,18 +446,31 @@ PaymentResponse.prototype.complete = function(result) {};
  * @typedef {{
  *   buttonColor: (?string|undefined),
  *   buttonType: (?string|undefined),
+ *   buttonSizeMode: (?string|undefined),
+ *   buttonRootNode: (?ShadowRoot|?HTMLDocument|undefined),
+ *   buttonLocale: (?string|undefined),
  *   onClick: (?function():void|undefined),
  *   hasOffers: (?boolean|undefined),
+ *   allowedPaymentMethods: (?Array<string>|?Array<PaymentMethod>|undefined),
  * }}
  *
  * @property {string} buttonColor Color theme: black; white; default.
  *     The default value currently maps to black.
- * @property {string} buttonType Either short or long (default: long).
+ * @property {string} buttonType: plain; buy (default); donate; book; checkout;
+ *     order; pay; subscribe; short (alias of plain); long (alias of buy).
+ * @property {string} buttonSizeMode Either static or fill (default: static).
+ * @property {ShadowRoot|HTMLDocument} buttonRootNode: The element that we
+ * attach styles on.
+ * @property {string} buttonLocale The locale for the button in ISO 639-1 codes.
+ *   Supported locales are {@link
+ *   boq.instantbuyfrontendjs.Constants.BUTTON_LOCALE_TO_MIN_WIDTH}
  * @property {function()} onClick Callback on clicking the button.
  * @property {boolean} hasOffers When set to true, the Google Pay button will
  *     indicate that an offer is available for the user.
+ * @property {Array<string>} allowedPaymentMethods When this field is set,
+ *     user's card info on dynamic buttons will be filtered by allowed methods.
  */
-var ButtonOptions = {};
+let ButtonOptions;
 
 /**
  * Information about the selected payment method.
@@ -327,7 +483,7 @@ var ButtonOptions = {};
  *   cardImageUri: string,
  * }}
  */
-var CardInfo = {};
+let CardInfo;
 
 /**
  * The payment data response object returned to the integrator.
@@ -340,7 +496,32 @@ var CardInfo = {};
  *   shippingAddress: (UserAddress|undefined),
  * }}
  */
-var PaymentData = {};
+let PaymentData;
+
+/**
+ * The intermediate payment data response object returned to the integrator.
+ * This is returned in the middle of a transaction for developer callbacks.
+ * @record
+ */
+class IntermediatePaymentData {
+  constructor() {
+    /** @type {?IntermediatePaymentMethodData|undefined} */
+    this.paymentMethodData;
+
+    /** @type {?IntermediateAddress|undefined} */
+    this.shippingAddress;
+
+    /** @type {?SelectionOptionData|undefined} */
+    this.shippingOptionData;
+
+    /** @type {?OfferData|undefined} */
+    this.offerData;
+
+    /** @type {?string|undefined} */
+    this.callbackTrigger;
+  }
+}
+
 
 /**
  * Information about a requested postal address. All properties are strings.
@@ -359,7 +540,25 @@ var PaymentData = {};
  *   sortingCode: string,
  * }}
  */
-var UserAddress = {};
+let UserAddress;
+
+/**
+ * Limited information about a requested postal address.
+ * @record
+ */
+class IntermediateAddress {
+  constructor() {
+    /** @type {string} */
+    this.postalCode;
+
+    /** @type {string} */
+    this.countryCode;
+
+    /** @type {string} */
+    this.administrativeArea;
+  }
+}
+
 
 /**
  * Offer details for pre-notification. Description for the offer should not
@@ -369,4 +568,72 @@ var UserAddress = {};
  *   description: string
  * }}
  */
-var PreNotificationOfferDetails = {};
+let PreNotificationOfferDetails;
+
+/**
+ * Limited information about a payment method.
+ * @record
+ */
+class IntermediatePaymentMethodData {
+  constructor() {
+    /** @type {string} */
+    this.type;
+
+    /** @type {!IntermediateCardInfo|undefined} */
+    this.info;
+
+    /** @type {?Array<string>|undefined} */
+    this.tags;
+  }
+}
+
+
+/**
+ * Limited information about a card.
+ * @record
+ */
+class IntermediateCardInfo {
+  constructor() {
+    /** @type {string} */
+    this.cardNetwork;
+  }
+}
+
+/**
+ * Definition of an error in PaymentData.
+ * @record
+ */
+class PaymentDataError {
+  constructor() {
+    /** @type {string} */
+    this.reason;
+
+    /** @type {string} */
+    this.intent;
+
+    /** @type {string} */
+    this.message;
+  }
+}
+
+/**
+ * Definition of the value of a SelectionOption
+ * @record
+ */
+class SelectionOptionData {
+  constructor() {
+    /** @type {string} */
+    this.id;
+  }
+}
+
+/**
+ * The offer data to be returned to the integrator.
+ * @record
+ */
+class OfferData {
+  constructor() {
+    /** @type {!Array<string>} */
+    this.redemptionCodes;
+  }
+}

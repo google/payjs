@@ -2,6 +2,7 @@
  * @fileoverview Import from Web Activities project
  * (https://github.com/google/web-activities).
  */
+
 /**
  * @license
  * Copyright 2017 The Web Activities Authors. All Rights Reserved.
@@ -18,7 +19,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- /** Version: 1.12 */
+ /** Version: 1.24 */
 
 
 /**
@@ -247,6 +248,11 @@ class ActivityHost {
 }
 
 
+
+/** Only allows http/https URLs. */
+const HTTP_S_ONLY_RE = /^https?\:/i;
+
+
 /** @type {?HTMLAnchorElement} */
 let aResolver;
 
@@ -269,7 +275,19 @@ function parseUrl(urlString) {
  * @return {string}
  */
 function getOrigin(loc) {
-  return loc.origin || loc.protocol + '//' + loc.host;
+  if (loc.origin) {
+    return loc.origin;
+  }
+  // Make sure that the origin is normalized. Specifically on IE, host sometimes
+  // includes the default port, which is not per standard.
+  const protocol = loc.protocol;
+  let host = loc.host;
+  if (protocol == 'https:' && host.indexOf(':443') == host.length - 4) {
+    host = host.replace(':443', '');
+  } else if (protocol == 'http:' && host.indexOf(':80') == host.length - 3) {
+    host = host.replace(':80', '');
+  }
+  return protocol + '//' + host;
 }
 
 
@@ -322,6 +340,36 @@ function parseQueryString(query) {
  */
 function getQueryParam(queryString, param) {
   return parseQueryString(queryString)[param];
+}
+
+
+/**
+ * Asserts that a given url is an absolute HTTP or HTTPS URL.
+ * @param {?string} urlString
+ * @return {?string}
+ */
+function assertAbsoluteHttpOrHttpsUrl(urlString) {
+  if (!HTTP_S_ONLY_RE.test(urlString)) {
+    throw new Error('must be http(s)');
+  }
+  return urlString;
+}
+
+
+/**
+ * Asserts that a given url is not an obvious script URL. This is not intended
+ * as a complete verification. The complete verification is left up to the
+ * host before `accept()` method is called.
+ * @param {?string} urlString
+ * @return {?string}
+ */
+function assertObviousUnsafeUrl(urlString) {
+  if (urlString) {
+    if (googUriUtils.getScheme(urlString).indexOf('script') != -1) {
+      throw new Error('unsafe "' + urlString + '"');
+    }
+  }
+  return urlString;
 }
 
 
@@ -414,10 +462,12 @@ class Messenger {
    * @param {!Window} win
    * @param {!Window|function():?Window} targetOrCallback
    * @param {?string} targetOrigin
+   * @param {boolean} requireTarget
    */
-  constructor(win, targetOrCallback, targetOrigin) {
+  constructor(win, targetOrCallback, targetOrigin, requireTarget) {
     /** @private @const {!Window} */
     this.win_ = win;
+
     /** @private @const {!Window|function():?Window} */
     this.targetOrCallback_ = targetOrCallback;
 
@@ -426,6 +476,9 @@ class Messenger {
      * @private {?string}
      */
     this.targetOrigin_ = targetOrigin;
+
+    /** @private @const {boolean} */
+    this.requireTarget_ = requireTarget;
 
     /** @private {?Window} */
     this.target_ = null;
@@ -716,6 +769,13 @@ class Messenger {
    * @private
    */
   handleEvent_(event) {
+    if (this.requireTarget_ && this.getOptionalTarget_() != event.source) {
+      // When target is required, confirm it against the event.source. This
+      // is normally only needed for ports where a single window can include
+      // multiple iframes to match the event to a specific iframe. Otherwise,
+      // the origin checks below are sufficient.
+      return;
+    }
     const data = event.data;
     if (!data || data['sentinel'] != SENTINEL) {
       return;
@@ -822,7 +882,8 @@ class ActivityIframeHost {
     this.messenger_ = new Messenger(
         this.win_,
         this.target_,
-        /* targetOrigin */ null);
+        /* targetOrigin */ null,
+        /* requireTarget */ false);
 
     /** @private {?Object} */
     this.args_ = null;
@@ -1096,7 +1157,8 @@ class ActivityWindowPopupHost {
     this.messenger_ = new Messenger(
         this.win_,
         this.target_,
-        /* targetOrigin */ null);
+        /* targetOrigin */ null,
+        /* requireTarget */ false);
 
     /** @private {?Object} */
     this.args_ = null;
@@ -1104,7 +1166,7 @@ class ActivityWindowPopupHost {
     /** @private {boolean} */
     this.connected_ = false;
 
-    /** @private {?function(!ActivityHost)} */
+    /** @private {?function((!ActivityHost|!Promise))} */
     this.connectedResolver_ = null;
 
     /** @private @const {!Promise<!ActivityHost>} */
@@ -1124,6 +1186,9 @@ class ActivityWindowPopupHost {
     /** @private @const {!ActivityWindowRedirectHost} */
     this.redirectHost_ = new ActivityWindowRedirectHost(this.win_);
 
+    /** @private {?string} */
+    this.requestString_ = null;
+
     /** @private @const {!Function} */
     this.boundUnload_ = this.unload_.bind(this);
   }
@@ -1136,14 +1201,25 @@ class ActivityWindowPopupHost {
   connect(opt_request) {
     this.connected_ = false;
     this.accepted_ = false;
+    let redirectHostError;
     return this.redirectHost_.connect(opt_request).then(() => {
+      this.requestString_ = this.redirectHost_.getRequestString();
+    }, reason => {
+      // Don't throw the error immediately - give chance for the popup
+      // connection to succeed.
+      redirectHostError = reason;
+    }).then(() => {
       this.messenger_.connect(this.handleCommand_.bind(this));
       this.messenger_.sendConnectCommand();
       // Give the popup channel ~5 seconds to connect and if it can't,
       // assume that the client is offloaded and proceed with redirect.
       setTimeout(() => {
         if (this.connectedResolver_) {
-          this.connectedResolver_(this.redirectHost_);
+          if (redirectHostError) {
+            this.connectedResolver_(Promise.reject(redirectHostError));
+          } else {
+            this.connectedResolver_(this.redirectHost_);
+          }
           this.connectedResolver_ = null;
         }
       }, 5000);
@@ -1157,6 +1233,7 @@ class ActivityWindowPopupHost {
     this.accepted_ = false;
     this.messenger_.disconnect();
     this.win_.removeEventListener('unload', this.boundUnload_);
+    this.win_.removeEventListener('beforeunload', this.boundUnload_);
 
     // Try to close the window. A similar attempt will be made by the client
     // port.
@@ -1172,7 +1249,7 @@ class ActivityWindowPopupHost {
   /** @override */
   getRequestString() {
     this.ensureConnected_();
-    return this.redirectHost_.getRequestString();
+    return this.requestString_;
   }
 
   /** @override */
@@ -1231,27 +1308,47 @@ class ActivityWindowPopupHost {
     setTimeout(() => this.resized_(), 50);
   }
 
-  /** @override */
+  /**
+   * Whether the host can or cannot receive a message depends on the type of
+   * host and its state. Ensure that the code has an alternative path if
+   * messaging is not available.
+   * @override
+   */
   isMessagingSupported() {
-    return false;
+    return true;
   }
 
-  /** @override */
-  message() {
+  /**
+   * Whether the host can or cannot receive a message depends on the type of
+   * host and its state. Ensure that the code has an alternative path if
+   * messaging is not available.
+   * @override
+   */
+  message(payload) {
     this.ensureAccepted_();
-    // Not supported for compatibility with redirect mode.
+    this.messenger_.customMessage(payload);
   }
 
-  /** @override */
-  onMessage() {
+  /**
+   * Whether the host can or cannot receive a message depends on the type of
+   * host and its state. Ensure that the code has an alternative path if
+   * messaging is not available.
+   * @override
+   */
+  onMessage(callback) {
     this.ensureAccepted_();
-    // Not supported for compatibility with redirect mode.
+    this.messenger_.onCustomMessage(callback);
   }
 
-  /** @override */
+  /**
+   * Whether the host can or cannot receive a message depends on the type of
+   * host and its state. Ensure that the code has an alternative path if
+   * messaging is not available.
+   * @override
+   */
   messageChannel(opt_name) {
     this.ensureAccepted_();
-    throw new Error('not supported');
+    return this.messenger_.startChannel(opt_name);
   }
 
   /** @override */
@@ -1301,6 +1398,7 @@ class ActivityWindowPopupHost {
     });
     // Do not disconnect, wait for "close" message to ack the result receipt.
     this.win_.removeEventListener('unload', this.boundUnload_);
+    this.win_.removeEventListener('beforeunload', this.boundUnload_);
     // TODO: Consider taking an action if result acknowledgement
     // does not arrive in some time (3-5s). For instance, we can redirect
     // back or ask the host implementer to take an action.
@@ -1318,6 +1416,7 @@ class ActivityWindowPopupHost {
       this.connected_ = true;
       this.connectedResolver_(this);
       this.win_.addEventListener('unload', this.boundUnload_);
+      this.win_.addEventListener('beforeunload', this.boundUnload_);
     } else if (cmd == 'close') {
       this.disconnect();
     }
@@ -1416,7 +1515,7 @@ class ActivityWindowRedirectHost {
           const fragmentRequestParam =
               getQueryParam(this.win_.location.hash, '__WA__');
           if (fragmentRequestParam) {
-            requestString = decodeURIComponent(fragmentRequestParam);
+            requestString = fragmentRequestParam;
           }
         }
         if (requestString) {
@@ -1428,7 +1527,10 @@ class ActivityWindowRedirectHost {
       }
       this.requestId_ = request.requestId;
       this.args_ = request.args;
-      this.returnUrl_ = request.returnUrl;
+      // The "safe" check here is very superficial and only meant to prevent
+      // obvious unsafe URLs. The complete verification is delegated to the
+      // host as part of the `accept()` call.
+      this.returnUrl_ = assertObviousUnsafeUrl(request.returnUrl);
       if (request.origin) {
         // Trusted request: trust origin and verified flag explicitly.
         this.targetOrigin_ = request.origin;
@@ -1589,9 +1691,15 @@ class ActivityWindowRedirectHost {
       'code': code,
       'data': data,
     };
+    // The return origin must be either validated/accepted or it must be
+    // strictly an http(s) URL for any "return" attempt to be made.
+    const baseReturnUrl =
+        this.accepted_ ?
+        this.returnUrl_ :
+        assertAbsoluteHttpOrHttpsUrl(this.returnUrl_);
     const returnUrl =
-        this.returnUrl_ +
-        (this.returnUrl_.indexOf('#') == -1 ? '#' : '&') +
+        baseReturnUrl +
+        (baseReturnUrl.indexOf('#') == -1 ? '#' : '&') +
         '__WA_RES__=' + encodeURIComponent(JSON.stringify(response));
     this.redirect_(returnUrl);
   }
@@ -1638,7 +1746,7 @@ class ActivityHosts {
    */
   constructor(win) {
     /** @const {string} */
-    this.version = '1.12';
+    this.version = '1.24';
 
     /** @private @const {!Window} */
     this.win_ = win;

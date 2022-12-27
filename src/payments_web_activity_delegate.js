@@ -15,13 +15,15 @@
  * limitations under the License.
  */
 
+import {CallbackHandler} from './callback_handler.js';
 import {Constants} from './constants.js';
 import {Graypane} from './graypane.js';
 import {PaymentsClientDelegateInterface} from './payments_client_delegate_interface.js';
-import {ActivityPort, ActivityPorts, ActivityIframePort} from '../third_party/web_activities/activity-ports.js';
+import {ActivityIframePort, ActivityPort, ActivityPorts} from '../third_party/web_activities/activity-ports.js';
 import {BuyFlowActivityMode, PayFrameHelper, PostMessageEventType} from './pay_frame_helper.js';
 import {doesMerchantSupportOnlyTokenizedCards} from './validator.js';
-import {injectStyleSheet, injectIframe} from './element_injector.js';
+import {injectIframe, injectStyleSheet} from './element_injector.js';
+
 
 const GPAY_ACTIVITY_REQUEST = 'GPAY';
 const IFRAME_CLOSE_DURATION_IN_MS = 250;
@@ -36,11 +38,13 @@ const ERROR_PREFIX = 'Error: ';
  * @enum {string}
  */
 const BrowserUserAgent = {
+  APPLEWEBKIT: 'AppleWebKit',
   CHROME: 'Chrome',
   FIREFOX: 'Firefox',
+  OPERATOUCH: 'OPT',
   SAFARI: 'Safari',
+  UCBROWSER: 'UCBrowser',
 };
-
 
 /**
  * Resizing payload including resize height and transition style.
@@ -102,12 +106,32 @@ class PaymentsWebActivityDelegate {
      */
     this.savedResizePayload_ = null;
 
+    /**
+     * @private {?PaymentDataCallbacks}
+     */
+    this.paymentDataCallbacks_ = null;
+
+    /**
+     * This is defined for testing.
+     * @type {?Promise}
+     */
+    this.paymentDataCallbackPromise = null;
+
+    /**
+     * This is defined for testing.
+     * @protected {?Promise}
+     */
+    this.paymentAuthorizationCallbackPromise = null;
+
+    /**
+     * @private {number}
+     */
+    this.requestTimeoutLimit_ = Constants.DEFAULT_REQUEST_TIMEOUT_LIMIT;
+
     // Only install dialog styles when iframing is allowed.
     if (this.useIframe_) {
       injectStyleSheet(Constants.IFRAME_STYLE);
-      if (null) {
-        injectStyleSheet(Constants.IFRAME_STYLE_CENTER);
-      }
+      injectStyleSheet(Constants.IFRAME_STYLE_CENTER);
     }
   }
 
@@ -132,7 +156,8 @@ class PaymentsWebActivityDelegate {
     this.callback_(port.acceptResult().then(
         (result) => {
           // Origin must always match: popup, iframe or redirect.
-          if (result.origin != this.getOrigin_()) {
+          if (this.environment_ != 'TIN'  // Skip origin check if testing on Tin
+              && result.origin != this.getOrigin_()) {
             throw new Error('channel mismatch');
           }
           const data = /** @type {!PaymentData} */ (result.data);
@@ -239,31 +264,55 @@ class PaymentsWebActivityDelegate {
       const userAgent = window.navigator.userAgent;
       const isIosGsa = userAgent.indexOf('GSA/') > 0 &&
           userAgent.indexOf(BrowserUserAgent.SAFARI) > 0;
-      // pop up in IGSA doesn't work.
-      if (isIosGsa && !this.useIframe_) {
+      const isIosOpa = userAgent.indexOf('OPA/') > 0 &&
+          userAgent.indexOf(BrowserUserAgent.APPLEWEBKIT) > 0;
+      const isFirefoxIos = userAgent.indexOf('FxiOS') > 0;
+      const isInstagram = userAgent.indexOf('Instagram') > 0;
+      const isFacebook = userAgent.indexOf('FB_IAB') > 0;
+      const isMobileMapsWebview = userAgent.indexOf('AndroidMapsWebView') > 0;
+      // pop up in IGSA|FOPA|Firefox|Instagram|Facebook|GMMWebview doesn't work.
+      if ((isIosGsa || isIosOpa || isFirefoxIos || isInstagram || isFacebook ||
+           isMobileMapsWebview) &&
+          !this.useIframe_) {
         resolve({'result': false});
         return;
       }
-      const isFirefoxIos = userAgent.indexOf('FxiOS') > 0;
-      if (isFirefoxIos) {
-        resolve({'result': false});
-        return;
+      let additionalBrowserSupport = false;
+      if (null) {
+        // UCBrowser Mini is NOT supported
+        if (userAgent.indexOf('UCMini') > 0) {
+          resolve({'result': false});
+          return;
+        }
+        additionalBrowserSupport =
+            userAgent.indexOf(BrowserUserAgent.OPERATOUCH) > 0 ||
+            userAgent.indexOf(BrowserUserAgent.UCBROWSER) > 0;
       }
       const isSupported = userAgent.indexOf(BrowserUserAgent.CHROME) > 0 ||
           userAgent.indexOf(BrowserUserAgent.FIREFOX) > 0 ||
-          userAgent.indexOf(BrowserUserAgent.SAFARI) > 0;
+          userAgent.indexOf(BrowserUserAgent.SAFARI) > 0 ||
+          additionalBrowserSupport ||
+          isIosOpa;
       if (isSupported && isReadyToPayRequest.apiVersion >= 2 &&
           isReadyToPayRequest.existingPaymentMethodRequired) {
         isReadyToPayRequest.environment = this.environment_;
         PayFrameHelper.sendAndWaitForResponse(
             isReadyToPayRequest, PostMessageEventType.IS_READY_TO_PAY,
-            'isReadyToPayResponse', function(event) {
+            ['isReadyToPayResponse', 'isReadyToPayError'], function(event) {
               const response = {
                 'result': isSupported,
               };
               if (isReadyToPayRequest.existingPaymentMethodRequired) {
-                response['paymentMethodPresent'] =
-                    event.data['isReadyToPayResponse'] == 'READY_TO_PAY';
+                if (event.data['isReadyToPayError']) {
+                  reject({
+                    'statusCode': 'DEVELOPER_ERROR',
+                    'statusMessage': 'Ready to pay error. Cause : ' +
+                        event.data['isReadyToPayError']
+                  });
+                } else {
+                  response['paymentMethodPresent'] =
+                      event.data['isReadyToPayResponse'] == 'READY_TO_PAY';
+                }
               }
               resolve(response);
             });
@@ -279,6 +328,7 @@ class PaymentsWebActivityDelegate {
     if (!this.useIframe_) {
       return;
     }
+    this.assignInternalParams_(paymentDataRequest);
     const containerAndFrame = this.injectIframe_(paymentDataRequest);
     const paymentDataPromise = this.openIframe_(
         containerAndFrame['container'], containerAndFrame['iframe'],
@@ -299,8 +349,13 @@ class PaymentsWebActivityDelegate {
         paymentDataRequest.apiVersion = 1;
       }
     }
+    if (paymentDataRequest['forceRedirect'] && this.paymentDataCallbacks_) {
+      throw new Error('Callback is not supported in redirect mode');
+    }
     paymentDataRequest.environment = this.environment_;
+    this.assignInternalParams_(paymentDataRequest);
     if (this.useIframe_) {
+      // TODO: move this logic into ActivityModeSelector.
       PayFrameHelper.setBuyFlowActivityMode(BuyFlowActivityMode.IFRAME);
       // TODO: Compare the request with prefetched request.
       let containerAndFrame;
@@ -319,7 +374,8 @@ class PaymentsWebActivityDelegate {
       this.showContainerAndIframeWithAnimation_(
           containerAndFrame['container'], containerAndFrame['iframe'],
           paymentDataRequest);
-      history.pushState({}, '', '');
+      // Push current URL w/ query parameters to history
+      history.pushState({}, '', window.location.href);
       const onPopState = (e) => {
         e.preventDefault();
         this.backButtonHandler_(containerAndFrame);
@@ -332,14 +388,76 @@ class PaymentsWebActivityDelegate {
       this.callback_(Promise.race([paymentDataPromise, dismissPromise]));
       return;
     }
+    // TODO: move this logic into ActivityModeSelector.
     PayFrameHelper.setBuyFlowActivityMode(
         paymentDataRequest['forceRedirect'] ? BuyFlowActivityMode.REDIRECT :
                                               BuyFlowActivityMode.POPUP);
-    const opener = this.activities.open(
-        GPAY_ACTIVITY_REQUEST, this.getHostingPageUrl_(),
-        this.getRenderMode_(paymentDataRequest), paymentDataRequest,
-        {'width': 600, 'height': 600});
-    this.graypane_.show(opener && opener.targetWin);
+    return this.activities
+        .openWithMessaging(
+            GPAY_ACTIVITY_REQUEST, this.getHostingPageUrl_(),
+            this.getRenderMode_(paymentDataRequest), paymentDataRequest,
+            this.getWebActivityOptions(paymentDataRequest))
+        .then((port) => {
+          const callbackHandler = new CallbackHandler();
+          this.graypane_.show(port && port.getTargetWin());
+
+          if (null) {
+            // Close the GPay popup window if the hosting page is closed,
+            // reloaded, or navigated away from.
+            const onBeforeUnload = (e) => {
+              port.getTargetWin().close();
+            };
+            window.addEventListener('beforeunload', onBeforeUnload);
+          }
+          port.onMessage(payload => {
+            if (payload['type'] == 'partialPaymentDataCallback') {
+              this.paymentDataCallbackPromise =
+                  callbackHandler
+                      .makePartialPaymentDataCallbackAndGenerateMessageForWebActivity(
+                          /** @type {!IntermediatePaymentData} */ (
+                              payload['data']),
+                          this.paymentDataCallbacks_, this.requestTimeoutLimit_)
+                      .then(data => port.message(data));
+            } else if (payload['type'] == 'fullPaymentDataCallback') {
+              this.paymentAuthorizationCallbackPromise =
+                  callbackHandler
+                      .makeFullPaymentDataCallbackAndGenerateMessageForWebActivity(
+                          /** @type {!PaymentData} */ (payload['data']),
+                          this.paymentDataCallbacks_, this.requestTimeoutLimit_)
+                      .then(data => {
+                        port.message(data);
+                      });
+            }
+          });
+        });
+  }
+
+  /**
+   * Returns the webactivity options.
+   *
+   * @param {!PaymentDataRequest} paymentDataRequest
+   * @return {!Object}
+   * @package
+   */
+  getWebActivityOptions(paymentDataRequest) {
+    let options = {'width': 600, 'height': 600};
+    if (!paymentDataRequest['forceRedirect'] && !paymentDataRequest.swg) {
+      options['disableRedirectFallback'] = true;
+    }
+    return options;
+  }
+
+  /** @override */
+  registerPaymentDataCallbacks(paymentDataCallbacks) {
+    this.paymentDataCallbacks_ = paymentDataCallbacks;
+  }
+
+  /**
+   * Set up a timeout promise for testing purpose
+   * @param {number} newRequestTimeoutLimit
+   */
+  withRequestTimeoutLimit(newRequestTimeoutLimit) {
+    this.requestTimeoutLimit_ = newRequestTimeoutLimit;
   }
 
   /**
@@ -371,6 +489,8 @@ class PaymentsWebActivityDelegate {
       baseDomain = 'pay-preprod.sandbox';
     } else if (this.environment_ == Constants.Environment.SANDBOX) {
       baseDomain = 'pay.sandbox';
+    } else if (this.environment_ == Constants.Environment.CANARY) {
+      baseDomain = 'ibfe-canary.corp';
     } else {
       baseDomain = 'pay';
     }
@@ -424,15 +544,20 @@ class PaymentsWebActivityDelegate {
    *
    * @param {string} environment
    * @param {string} origin
+   * @param {string=} coordinationToken
    * @return {string} The iframe url
    */
-  getIframeUrl(environment, origin) {
+  getIframeUrl(environment, origin, coordinationToken = '') {
     // TODO: These should be compile time constants and not dependent
     // on the environment.
-    let iframeUrl = `https://pay.google.com/gp/p/ui/pay?origin=${origin}`;
-    if (environment == Constants.Environment.SANDBOX ||
+    // TODO: Clean up lint > 100 character errors.
+    let iframeUrl = `https://pay.google.com/gp/p/ui/pay?origin=${origin}&coordination_token=${coordinationToken}`;
+    if (environment == Constants.Environment.CANARY) {
+      iframeUrl = `https://ibfe-canary.corp.google.com/gp/p/ui/pay?origin=${origin}&coordination_token=${coordinationToken}`;
+    } else if (
+        environment == Constants.Environment.SANDBOX ||
         environment == Constants.Environment.PREPROD) {
-      iframeUrl =   `https://pay'+  (environment == Constants.Environment.PREPROD ? '-preprod' : '')+  '.sandbox.google.com/gp/p/ui/pay?origin=${origin}`;
+      iframeUrl =   `https://pay'+  (environment == Constants.Environment.PREPROD ? '-preprod' : '')+  '.sandbox.google.com/gp/p/ui/pay?origin=${origin}&coordination_token=${coordinationToken}`;
     }
     return iframeUrl;
   }
@@ -463,7 +588,7 @@ class PaymentsWebActivityDelegate {
    */
   injectIframe_(paymentDataRequest) {
     const containerAndFrame = injectIframe(
-        this.isVerticalCenterExperimentEnabled_(paymentDataRequest) ?
+        this.renderIframeContainerCenter_(paymentDataRequest) ?
             Constants.IFRAME_STYLE_CENTER_CLASS :
             Constants.IFRAME_STYLE_CLASS);
     const iframe = containerAndFrame['iframe'];
@@ -525,10 +650,9 @@ class PaymentsWebActivityDelegate {
    * @return {boolean}
    * @private
    */
-  isVerticalCenterExperimentEnabled_(paymentDataRequest) {
-    return null
-        && paymentDataRequest['i']
-        && paymentDataRequest['i'].renderContainerCenter;
+  renderIframeContainerCenter_(paymentDataRequest) {
+    return paymentDataRequest['i'] &&
+        paymentDataRequest['i'].renderContainerCenter;
   }
 
   /**
@@ -544,7 +668,7 @@ class PaymentsWebActivityDelegate {
       // Hard code the apprx height here, it will be resize to expected height
       // later.
       iframe.height = '280px';
-      if (this.isVerticalCenterExperimentEnabled_(paymentDataRequest)) {
+      if (this.renderIframeContainerCenter_(paymentDataRequest)) {
         iframe.classList.add(Constants.IFRAME_ACTIVE_CONTAINER_CLASS);
       }
       // TODO: This should be handles properly by listening to
@@ -587,35 +711,61 @@ class PaymentsWebActivityDelegate {
         paymentDataRequest.apiVersion = 1;
       }
     }
+    let coordinationToken = '';
+    if (paymentDataRequest.i && paymentDataRequest.i.coordinationToken) {
+      coordinationToken = paymentDataRequest.i.coordinationToken;
+    }
     paymentDataRequest.environment = this.environment_;
     let iframeLoadStartTime;
     const trustedUrl =
-        this.getIframeUrl(this.environment_, window.location.origin);
+        this.getIframeUrl(
+            this.environment_, window.location.origin, coordinationToken);
     return this.activities.openIframe(iframe, trustedUrl, paymentDataRequest)
         .then(port => {
           // Handle custom resize message.
           this.port_ = port;
+          const callbackHandler = new CallbackHandler();
           port.onMessage(payload => {
-            if (payload['type'] !== 'resize' || !this.shouldHandleResizing_) {
-              // Save the resize event later after initial animation is finished
-              this.savedResizePayload_ = {
-                'height': payload['height'],
-                'transition': payload['transition']
-              };
-              return;
+            if (payload['type'] == 'partialPaymentDataCallback') {
+              this.paymentDataCallbackPromise =
+                  callbackHandler
+                      .makePartialPaymentDataCallbackAndGenerateMessageForWebActivity(
+                          /** @type {!IntermediatePaymentData} */ (
+                              payload['data']),
+                          this.paymentDataCallbacks_, this.requestTimeoutLimit_)
+                      .then(data => port.message(data));
+            } else if (payload['type'] == 'fullPaymentDataCallback') {
+              this.paymentAuthorizationCallbackPromise =
+                  callbackHandler
+                      .makeFullPaymentDataCallbackAndGenerateMessageForWebActivity(
+                          /** @type {!PaymentData} */ (payload['data']),
+                          this.paymentDataCallbacks_, this.requestTimeoutLimit_)
+                      .then(data => port.message(data));
+            } else if (payload['type'] == 'resize') {
+              if (!this.shouldHandleResizing_) {
+                // Save the resize event later after initial animation is
+                // finished
+                this.savedResizePayload_ = {
+                  'height': payload['height'],
+                  'transition': payload['transition']
+                };
+                return;
+              }
+              // b/111310899: Smooth out initial iFrame loading
+              if (!iframeLoadStartTime) {
+                iframeLoadStartTime = Date.now();
+              }
+              if (Date.now() <
+                  iframeLoadStartTime + IFRAME_SHOW_UP_DURATION_IN_MS) {
+                this.setTransition_(
+                    iframe,
+                    payload['transition'] + ', ' +
+                        IFRAME_SMOOTH_HEIGHT_TRANSITION);
+              } else {
+                this.setTransition_(iframe, payload['transition']);
+              }
+              iframe.height = payload['height'];
             }
-            // b/111310899: Smooth out initial iFrame loading
-            if (!iframeLoadStartTime) {
-              iframeLoadStartTime = Date.now();
-            }
-            if (Date.now() <
-                iframeLoadStartTime + IFRAME_SHOW_UP_DURATION_IN_MS) {
-              this.setTransition_(iframe, payload['transition'] + ', '
-                  + IFRAME_SMOOTH_HEIGHT_TRANSITION);
-            } else {
-              this.setTransition_(iframe, payload['transition']);
-            }
-            iframe.height = payload['height'];
           });
           return /** @type {!Promise<!Object>} */ (port.acceptResult());
         })
@@ -637,6 +787,21 @@ class PaymentsWebActivityDelegate {
               history.back();
               return Promise.reject(error);
             });
+  }
+
+  /**
+   * @param {!PaymentDataRequest} paymentDataRequest
+   * @return {!PaymentDataRequest}
+   * @private
+   */
+  assignInternalParams_(paymentDataRequest) {
+    const internalParam = {
+      'startTimeMs': Date.now(),
+    };
+    paymentDataRequest['i'] = paymentDataRequest['i'] ?
+        Object.assign(internalParam, paymentDataRequest['i']) :
+        internalParam;
+    return paymentDataRequest;
   }
 }
 

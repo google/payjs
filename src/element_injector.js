@@ -20,13 +20,22 @@ import {Constants} from './constants.js';
 /**
  * Injects the provided style sheet to the document head.
  * @param {string} styleText The stylesheet to be injected.
+ * @param {?ShadowRoot|?HTMLDocument=} rootNode The element that we
+ *     attach styles on.
  * @return {!Element}
  */
-function injectStyleSheet(styleText) {
+function injectStyleSheet(styleText, rootNode = document) {
   const styleElement = document.createElement('style');
   styleElement.type = 'text/css';
   styleElement.textContent = styleText;
-  document.head.appendChild(styleElement);
+  if (rootNode instanceof HTMLDocument) {
+    document.head.appendChild(styleElement);
+  } else if (rootNode instanceof ShadowRoot) {
+    rootNode.appendChild(styleElement);
+  } else {
+    throw new Error(
+        'Parameter \'buttonRootNode\' should be either document or a shadowroot.');
+  }
   return styleElement;
 }
 

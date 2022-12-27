@@ -16,53 +16,20 @@
  */
 
 import {Constants} from './constants.js';
+import {endsWith} from './utils.js';
+
+const PAYMENT_DATA_CHANGED_INTENTS = ['SHIPPING_ADDRESS', 'SHIPPING_OPTION'];
+
+let /** @type {boolean} */ localSecureBypass = true;
 
 /**
- * @return {boolean} true if this version of Chrome supports PaymentHandler.
+ * @param {boolean} value If false, validateSecureContext() returns
+ * error string unless window.isSecureContext is true even for localhost or
+ * "*.google.com".
  */
-function chromeSupportsPaymentHandler() {
-  // Check if feature is enabled for user
-  if (typeof google == 'undefined' ||
-      !null) {
-    return false;
-  }
-
-  // Payment handler isn't supported on mobile
-  const mobilePlatform = window.navigator.userAgent.match(
-      /Android|iPhone|iPad|iPod|BlackBerry|IEMobile/i);
-  if (mobilePlatform != null) {
-    return false;
-  }
-
-  const chromeVersion = window.navigator.userAgent.match(/Chrome\/([0-9]+)\./i);
-  return 'PaymentRequest' in window && chromeVersion != null &&
-      Number(chromeVersion[1]) >= 68 &&
-      window.navigator.vendor == 'Google Inc.';
+function setLocalSecureBypass(value) {
+  localSecureBypass = value;
 }
-
-/**
- * @return {boolean} true if this version of Chrome supports PaymentRequest.
- */
-function chromeSupportsPaymentRequest() {
-  // Opera uses chrome as rendering engine and sends almost the exact same
-  // user agent as chrome thereby fooling us on android.
-  const isOpera = window.navigator.userAgent.indexOf('OPR/') != -1;
-  if (isOpera) {
-    return false;
-  }
-  if (chromeSupportsPaymentHandler()) {
-    return true;
-  }
-
-  const androidPlatform = window.navigator.userAgent.match(/Android/i);
-  const chromeVersion = window.navigator.userAgent.match(/Chrome\/([0-9]+)\./i);
-  return androidPlatform != null && 'PaymentRequest' in window &&
-      // Make sure skipping PaymentRequest UI when only one PaymentMethod is
-      // supported (starts on Google Chrome 59).
-      window.navigator.vendor == 'Google Inc.' && chromeVersion != null &&
-      Number(chromeVersion[1]) >= 59;
-}
-
 /**
  * @param {!IsReadyToPayRequest} isReadyToPayRequest
  *
@@ -84,7 +51,7 @@ function doesMerchantSupportOnlyTokenizedCards(isReadyToPayRequest) {
 
 /**
  * @param {!IsReadyToPayRequest} isReadyToPayRequest
- * @param {Constants.AuthMethod} apiV2AuthMethod
+ * @param {!Constants.AuthMethod} apiV2AuthMethod
  *
  * @return {boolean} true if the merchant supports pan cards.
  */
@@ -111,7 +78,8 @@ function apiV2DoesMerchantSupportSpecifiedCardType(
  * message.
  */
 function validateSecureContext() {
-  if (window.location.hostname.endsWith(Constants.TRUSTED_DOMAIN)) {
+  if (localSecureBypass &&
+      endsWith(window.location.hostname, Constants.TRUSTED_DOMAIN)) {
     // This is for local development.
     return null;
   }
@@ -126,17 +94,17 @@ function validateSecureContext() {
 }
 
 /**
- * Validate PaymentOptions.
+ * Validate PaymentsClientOptions.
  *
- * @param {!PaymentOptions} paymentOptions
+ * @param {!PaymentsClientOptions} paymentsClientOptions
  */
-function validatePaymentOptions(paymentOptions) {
-  if (paymentOptions.environment &&
+function validatePaymentsClientOptions(paymentsClientOptions) {
+  if (paymentsClientOptions.environment &&
       !Object.values(Constants.Environment)
-           .includes(paymentOptions.environment)) {
+           .includes(paymentsClientOptions.environment)) {
     throw new Error(
-        'Parameter environment in PaymentOptions can optionally be set to ' +
-        'PRODUCTION, otherwise it defaults to TEST.');
+        'Parameter environment in PaymentsClientOptions can optionally be ' +
+        'set to PRODUCTION, otherwise it defaults to TEST.');
   }
 }
 
@@ -149,7 +117,11 @@ function validatePaymentOptions(paymentOptions) {
 function validateIsReadyToPayRequest(isReadyToPayRequest) {
   if (!isReadyToPayRequest) {
     return 'isReadyToPayRequest must be set!';
-  } else if (isReadyToPayRequest.apiVersion >= 2) {
+  }
+  if (getUpiPaymentMethod(isReadyToPayRequest)) {
+    return 'UPI not supported';
+  }
+  if (isReadyToPayRequest.apiVersion >= 2) {
     if (!('apiVersionMinor' in isReadyToPayRequest)) {
       return 'apiVersionMinor must be set!';
     }
@@ -222,6 +194,9 @@ function validatePaymentDataRequest(paymentDataRequest) {
   if (!paymentDataRequest) {
     return 'paymentDataRequest must be set!';
   }
+  if (getUpiPaymentMethod(paymentDataRequest)) {
+    return 'UPI not supported';
+  }
   if (paymentDataRequest.swg) {
     return validatePaymentDataRequestForSwg(paymentDataRequest.swg);
   } else if (!paymentDataRequest.transactionInfo) {
@@ -283,8 +258,7 @@ function validatePaymentDataRequest(paymentDataRequest) {
  * @return {?Object}
  */
 function getUpiPaymentMethod(request) {
-  if (!chromeSupportsPaymentRequest() || request.apiVersion < 2 ||
-      !request.allowedPaymentMethods) {
+  if (request.apiVersion < 2 || !request.allowedPaymentMethods) {
     return null;
   }
   return getAllowedPaymentMethodForType_(request, Constants.PaymentMethod.UPI);
@@ -302,6 +276,38 @@ function validatePaymentDataRequestForSwg(swgParameters) {
   }
   if (!swgParameters.skuId || !swgParameters.publicationId) {
     return 'Both skuId and publicationId must be provided';
+  }
+  return null;
+}
+
+/**
+ * Validate callback parameters are set up properly.
+ *
+ * @param {!PaymentDataRequest} request
+ * @param {?PaymentDataCallbacks} paymentDataCallbacks
+ * @return {?string} errorMessage if the parameters are invalid.
+ */
+function validateCallbackParameters(request, paymentDataCallbacks) {
+  if (request.callbackIntents && !paymentDataCallbacks) {
+    return 'paymentDataCallbacks must be set';
+  }
+  if (request.callbackIntents.includes('PAYMENT_AUTHORIZATION') !==
+      !!paymentDataCallbacks.onPaymentAuthorized) {
+    return 'Both PAYMENT_AUTHORIZATION intent and onPaymentAuthorized must ' +
+        'be set';
+  }
+  let supportedIntents = PAYMENT_DATA_CHANGED_INTENTS.slice();
+  if (null) {
+    supportedIntents.push('OFFER');
+  }
+  if (null) {
+    supportedIntents.push('PAYMENT_METHOD');
+  }
+  if (!!supportedIntents
+            .filter(intent => request.callbackIntents.includes(intent))
+            .length !== !!paymentDataCallbacks.onPaymentDataChanged) {
+    return 'onPaymentDataChanged callback must be set if any of ' +
+        `${supportedIntents} callback intent is set.`;
   }
   return null;
 }
@@ -344,13 +350,13 @@ function getAllowedPaymentMethodForType_(
 
 export {
   apiV2DoesMerchantSupportSpecifiedCardType,
-  chromeSupportsPaymentHandler,
-  chromeSupportsPaymentRequest,
   doesMerchantSupportOnlyTokenizedCards,
   getUpiPaymentMethod,
   isPaymentMethodValid,
+  setLocalSecureBypass,
+  validateCallbackParameters,
   validateIsReadyToPayRequest,
-  validatePaymentOptions,
+  validatePaymentsClientOptions,
   validatePaymentDataRequest,
   validateSecureContext
 };
