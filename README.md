@@ -1,3 +1,7 @@
+# Obsolete Code Do Not Use
+
+This repo is obsolete, it remains here becasue it's still used by subscriptions-project and AMP but it should not be used for new projects, future availability is not guaranteed.
+
 # Google Pay Integration Library
 
 For a detailed tutorial on how to use this library please go through
